@@ -1,6 +1,7 @@
 import math
 import random
 import time
+import thread
 
 from collections import deque
 from pyglet import image
@@ -70,10 +71,11 @@ def tex_coords(top, bottom, side):
 
 TEXTURE_PATH = 'texture.png'
 
-GRASS = tex_coords((1, 0), (0, 1), (0, 0))
-SAND = tex_coords((1, 1), (1, 1), (1, 1))
-BRICK = tex_coords((2, 0), (2, 0), (2, 0))
-STONE = tex_coords((2, 1), (2, 1), (2, 1))
+BLOCKS = {}
+BLOCKS["GRASS"] = tex_coords((1, 0), (0, 1), (0, 0))
+BLOCKS["SAND"] = tex_coords((1, 1), (1, 1), (1, 1))
+BLOCKS["BRICK"] = tex_coords((2, 0), (2, 0), (2, 0))
+BLOCKS["STONE"] = tex_coords((2, 1), (2, 1), (2, 1))
 
 FACES = [
     ( 0, 1, 0),
@@ -159,12 +161,12 @@ class Model(object):
         for x in xrange(-n, n + 1, s):
             for z in xrange(-n, n + 1, s):
                 # create a layer stone an grass everywhere.
-                self.add_block((x, y - 2, z), GRASS, immediate=False)
-                self.add_block((x, y - 3, z), STONE, immediate=False)
+                self.add_block((x, y - 2, z), BLOCKS["GRASS"], immediate=False)
+                self.add_block((x, y - 3, z), BLOCKS["STONE"], immediate=False)
                 if x in (-n, n) or z in (-n, n):
                     # create outer walls.
                     for dy in xrange(-2, 3):
-                        self.add_block((x, y + dy, z), STONE, immediate=False)
+                        self.add_block((x, y + dy, z), BLOCKS["STONE"], immediate=False)
 
         # generate the hills randomly
         o = n - 10
@@ -175,7 +177,7 @@ class Model(object):
             h = random.randint(1, 6)  # height of the hill
             s = random.randint(4, 8)  # 2 * s is the side length of the hill
             d = 1  # how quickly to taper off the hills
-            t = random.choice([GRASS, SAND, BRICK])
+            t = random.choice([BLOCKS["GRASS"], BLOCKS["SAND"], BLOCKS["BRICK"]])
             for y in xrange(c, c + h):
                 for x in xrange(a - s, a + s + 1):
                     for z in xrange(b - s, b + s + 1):
@@ -424,11 +426,92 @@ class Model(object):
         while self.queue:
             self._dequeue()
 
+class MenuItem(object):
+	def __init__(self, window, image, pos_x, pos_y):
+		item_image = pyglet.image.load(image)
+		item = pyglet.sprite.Sprite(item_image, x=pos_x, y=pos_y)
+		window.drawregister.add(item.draw)
+
+class MenuItemManager(object):
+	def __init__(self, window):
+		self.items = []
+		self.menu_position_x = 50
+		self.menu_position_y = 50
+		self.menu_item_size_x = 50
+		self.menu_item_size_y = 50
+		self.window = window
+
+	def addItem(self, image):
+		item_x = len(self.items) * self.menu_item_size_x + self.menu_position_x
+		item_y = self.menu_position_y
+
+		self.items.append(MenuItem(self.window, image, item_x, item_y))
+
+
+class UI(object):
+	def __init__(self, window):
+		self.window = window
+		self.itemkeypressed = []
+		self.menu_item_manager = MenuItemManager(window)
+
+		self.menu_item_manager.addItem("picaxe.png")
+		self.menu_item_manager.addItem("picaxe.png")
+
+	def informItemKeyPressed(self, keyNum):
+		self.test = pyglet.text.Label(
+			str(keyNum),
+			font_name='Times New Roman',
+            font_size=36,
+            x=window.width//2, y=window.height//2,
+            anchor_x='center', anchor_y='center')
+
+		for el in self.itemkeypressed:
+			window.drawregister.remove(el)
+			self.itemkeypressed.remove(el)
+
+		window.drawregister.add(self.test.draw)
+		window.drawregister.removeAfter(self.test.draw, 1)
+		self.itemkeypressed.append(self.test.draw)
+
+		
+
+class DrawRegister(object):
+	def __init__(self):
+		self.drawregister = []
+
+	# func is the function passed as an object, to be added to the draw register.
+	# exceptions handled internally.
+	def add(self, func):
+		self.drawregister.append(func)
+
+	# func is the function passed as an object,
+	#   to be removed 's' seconds after this is called.
+	def removeAfter(self, func, s):
+		def waitAndRemove():
+			time.sleep(s)
+			try:
+				self.remove(func)
+			except:
+				pass
+		thread.start_new_thread(waitAndRemove, ())
+
+	def remove(self, func):
+		try:
+			self.drawregister.remove(func)
+		except:
+			pass
+
+class Player(object):
+	def __init__(self):
+		self.inventory = [BLOCKS["BRICK"], BLOCKS["GRASS"], BLOCKS["SAND"]]
+		self.block = self.inventory[0]
 
 class Window(pyglet.window.Window):
 
     def __init__(self, *args, **kwargs):
         super(Window, self).__init__(*args, **kwargs)
+
+        self.player = Player()
 
         # Whether or not the window exclusively captures the mouse.
         self.exclusive = False
@@ -465,12 +548,6 @@ class Window(pyglet.window.Window):
         # Velocity in the y (upward) direction.
         self.dy = 0
 
-        # A list of blocks the player can place. Hit num keys to cycle.
-        self.inventory = [BRICK, GRASS, SAND]
-
-        # The current block the user can place. Hit num keys to cycle.
-        self.block = self.inventory[0]
-
         # Convenience list of num keys.
         self.num_keys = [
             key._1, key._2, key._3, key._4, key._5,
@@ -483,6 +560,8 @@ class Window(pyglet.window.Window):
         self.label = pyglet.text.Label('', font_name='Arial', font_size=18,
             x=10, y=self.height - 10, anchor_x='left', anchor_y='top',
             color=(0, 0, 0, 255))
+
+        self.drawregister = DrawRegister()
 
         # This call schedules the `update()` method to be called
         # TICKS_PER_SEC. This is the main game event loop.
@@ -673,10 +752,10 @@ class Window(pyglet.window.Window):
                     ((button == mouse.LEFT) and (modifiers & key.MOD_CTRL)):
                 # ON OSX, control + left click = right click.
                 if previous:
-                    self.model.add_block(previous, self.block)
+                    self.model.add_block(previous, self.player.block)
             elif button == pyglet.window.mouse.LEFT and block:
                 texture = self.model.world[block]
-                if texture != STONE:
+                if texture != BLOCKS["STONE"]:
                     self.model.remove_block(block)
         else:
             self.set_exclusive_mouse(True)
@@ -728,8 +807,9 @@ class Window(pyglet.window.Window):
         elif symbol == key.TAB:
             self.flying = not self.flying
         elif symbol in self.num_keys:
-            index = (symbol - self.num_keys[0]) % len(self.inventory)
-            self.block = self.inventory[index]
+            index = (symbol - self.num_keys[0]) % len(self.player.inventory)
+            self.block = self.player.inventory[index]
+            ui.informItemKeyPressed(index)
 
     def on_key_release(self, symbol, modifiers):
         """ Called when the player releases a key. See pyglet docs for key
@@ -811,6 +891,10 @@ class Window(pyglet.window.Window):
         self.draw_label()
         self.draw_reticle()
 
+        # Draw everything that's been added to the drawregister.
+        for reg in self.drawregister.drawregister:
+        	reg()
+
     def draw_focused_block(self):
         """ Draw black edges around the block that is currently under the
         crosshairs.
@@ -883,7 +967,10 @@ def setup():
 
 
 def main():
+    global window
     window = Window(width=800, height=600, caption='Pyglet', resizable=True)
+    global ui
+    ui = UI(window)
     # Hide the mouse cursor and prevent the mouse from leaving the window.
     window.set_exclusive_mouse(True)
     setup()
