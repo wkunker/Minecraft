@@ -45,7 +45,7 @@ def cube_vertices(x, y, z, n):
     ]
 
 
-def tex_coord(x, y, n=4):
+def tex_coord(x, y, n=1):
     """ Return the bounding vertices of the texture square.
 
     """
@@ -69,13 +69,42 @@ def tex_coords(top, bottom, side):
     return result
 
 
-TEXTURE_PATH = 'texture.png'
+# The TextureGroupManager classes are responsible for ensuring
+#   that only one copy of a TextureGroup exists for any given texture.
+class TextureGroupManager_BaseTextureGroup(object):
+    def __init__(self, filename, name):
+        self.name = name
+        self.filename = filename
+        self.group = TextureGroup(image.load(filename).get_texture())
+
+class TextureGroupManager(object):
+    def __init__(self):
+        self.textures = []
+    # Attempts to create a TextureGroup from a specified file if it isn't already available.
+    # If it is, it returns the existing TextureGroup instead.
+    # Attempts to match by name, if possible--If not available, reverts to filename.
+    def loadTexture(self, filename, name=False):
+        if(name == False):
+            name = filename
+        for t in self.textures:
+            if(name == t.name):
+                return t
+        x = TextureGroupManager_BaseTextureGroup(filename, name)
+        self.textures.append(x)
+        return x
+textureGroupManager = TextureGroupManager()
+
+class Block(object):
+    def __init__(self, texture_coords, texture_file):
+        self.texture_coords = texture_coords
+        self.baseTextureGroup = textureGroupManager.loadTexture(texture_file)
+        self.group = self.baseTextureGroup.group
 
 BLOCKS = {}
-BLOCKS["GRASS"] = tex_coords((1, 0), (0, 1), (0, 0))
-BLOCKS["SAND"] = tex_coords((1, 1), (1, 1), (1, 1))
-BLOCKS["BRICK"] = tex_coords((2, 0), (2, 0), (2, 0))
-BLOCKS["STONE"] = tex_coords((2, 1), (2, 1), (2, 1))
+BLOCKS["GRASS"] = Block(tex_coords((0, 0), (0, 0), (0, 0)), "grass.png")
+BLOCKS["SAND"] = Block(tex_coords((0, 0), (0, 0), (0, 0)), "sand.png")
+BLOCKS["BRICK"] = Block(tex_coords((0, 0), (0, 0), (0, 0)), "brick.png")
+BLOCKS["STONE"] = Block(tex_coords((0, 0), (0, 0), (0, 0)), "stone.png")
 
 FACES = [
     ( 0, 1, 0),
@@ -128,9 +157,6 @@ class Model(object):
 
         # A Batch is a collection of vertex lists for batched rendering.
         self.batch = pyglet.graphics.Batch()
-
-        # A TextureGroup manages an OpenGL texture.
-        self.group = TextureGroup(image.load(TEXTURE_PATH).get_texture())
 
         # A mapping from position to the texture of the block at that position.
         # This defines all the blocks that are currently in the world.
@@ -298,14 +324,15 @@ class Model(object):
             Whether or not to show the block immediately.
 
         """
-        texture = self.world[position]
+        texture = self.world[position].texture_coords
+        group = self.world[position].group
         self.shown[position] = texture
         if immediate:
-            self._show_block(position, texture)
+            self._show_block(position, group, texture)
         else:
-            self._enqueue(self._show_block, position, texture)
+            self._enqueue(self._show_block, position, group, texture)
 
-    def _show_block(self, position, texture):
+    def _show_block(self, position, group, texture):
         """ Private implementation of the `show_block()` method.
 
         Parameters
@@ -322,7 +349,7 @@ class Model(object):
         texture_data = list(texture)
         # create vertex list
         # FIXME Maybe `add_indexed()` should be used instead
-        self._shown[position] = self.batch.add(24, GL_QUADS, self.group,
+        self._shown[position] = self.batch.add(24, GL_QUADS, group,
             ('v3f/static', vertex_data),
             ('t2f/static', texture_data))
 
@@ -808,7 +835,7 @@ class Window(pyglet.window.Window):
             self.flying = not self.flying
         elif symbol in self.num_keys:
             index = (symbol - self.num_keys[0]) % len(self.player.inventory)
-            self.block = self.player.inventory[index]
+            self.player.block = self.player.inventory[index]
             ui.informItemKeyPressed(index)
 
     def on_key_release(self, symbol, modifiers):
