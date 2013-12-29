@@ -553,7 +553,11 @@ class InventoryItem_Block(InventoryItem):
         self.worldblock = BLOCKS[blocktype]
     def use(self, params):
         # Place the block
-        WINDOW.model.add_block(params, self.worldblock)
+        if(self.qty > 0):
+            WINDOW.model.add_block(params, self.worldblock)
+            self.qty -= 1
+        else:
+            WINDOW.player.inventory.remove(self)
 
 def getInventoryItemBlockFromWorldBlockPosition(worldblockposition):
     blocks = {}
