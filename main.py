@@ -482,11 +482,10 @@ class MenuItemManager(object):
         self.menu_item_size_y = 80
 
     def addItem(self, image):
-        for i in self.items:
+        for k,i in enumerate(self.items):
             if i.image_file == "empty.png":
-                i = MenuItem(self.window, image, item_x, item_y)
-                return
-
+                self.items[k] = MenuItem(self.window, image, i.pos_x, i.pos_y)
+                return k
         item_x = len(self.items) * self.menu_item_size_x + self.menu_position_x
         item_y = self.menu_position_y
         self.items.append(MenuItem(self.window, image, item_x, item_y))
@@ -496,6 +495,11 @@ class MenuItemManager(object):
         self.window.drawregister.remove(self.items[index].item_draw)
         self.items[index] = MenuItem(self.window, "empty.png", self.items[index].pos_x, self.items[index].pos_y)
 
+    def findItem(self, image):
+        for i in self.items:
+            if i.image_file == image:
+                return True
+        return False
 
 class UI(object):
     def __init__(self, window):
@@ -609,14 +613,16 @@ class Inventory(object):
         for i in self.inventory:
             if(i.name == item.name and i.qty < i.max_qty):
                 i.qty += qty
+                if self.window.UI.menu_item_manager.findItem(item.ui_texture) == False:
+                    item.ui_position = self.window.UI.menu_item_manager.addItem(item.ui_texture)
                 return
         # object wasn't found in inventory
+        item.ui_position = self.window.UI.menu_item_manager.addItem(item.ui_texture)
         for i in self.inventory:
             if(i == False):
                 i = item
                 return
         self.inventory.append(item)
-        item.ui_position = self.window.UI.menu_item_manager.addItem(item.ui_texture)
     def remove(self, item, qty=1):
         for i in self.inventory:
             if(i.name == item.name and i.qty > 1):
