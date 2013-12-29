@@ -593,7 +593,10 @@ class Inventory(object):
                 i.qty -= qty
                 return
         # object wasn't found in inventory
-        self.inventory.remove(item)
+        try:
+            self.inventory.remove(item)
+        except:
+            return
 
 class Player(object):
     def __init__(self):
