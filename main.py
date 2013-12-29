@@ -563,9 +563,12 @@ def getInventoryItemBlockFromWorldBlockPosition(worldblockposition):
     blocks = {}
     for k,v in BLOCKS.iteritems():
         blocks[k] = InventoryItem_Block(k)
-    for k,v in blocks.iteritems():
-        if(WINDOW.model.world[worldblockposition] == BLOCKS[k]):
-            return blocks[k]
+    try:
+        for k,v in blocks.iteritems():
+            if(WINDOW.model.world[worldblockposition] == BLOCKS[k]):
+                return blocks[k]
+    except:
+        return False
     return False
 
 class InventoryItem_MultiTool(InventoryItem):
@@ -574,22 +577,24 @@ class InventoryItem_MultiTool(InventoryItem):
         super(InventoryItem_MultiTool, self).__init__(name, 1)
 
     def use(self, params):
-        WINDOW.player.inventory.add(getInventoryItemBlockFromWorldBlockPosition(params))
-        WINDOW.model.remove_block(params)
+        item = getInventoryItemBlockFromWorldBlockPosition(params)
+        if(item != False):
+            WINDOW.player.inventory.add(item)
+            WINDOW.model.remove_block(params)
 
 class Inventory(object):
     def __init__(self):
         self.inventory = []
     def add(self, item, qty=1):
         for i in self.inventory:
-            if(i == item and i.qty < i.max_qty):
+            if(i.name == item.name and i.qty < i.max_qty):
                 i.qty += qty
                 return
         # object wasn't found in inventory
         self.inventory.append(item)
     def remove(self, item, qty=1):
         for i in self.inventory:
-            if(i == item and i.qty > 1):
+            if(i.name == item.name and i.qty > 1):
                 i.qty -= qty
                 return
         # object wasn't found in inventory
