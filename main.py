@@ -107,6 +107,7 @@ class Block(object):
         self.texture_coords = tex_coords()
         self.baseTextureGroup = textureGroupManager.loadTexture(texture_file)
         self.group = self.baseTextureGroup.group
+        self.texture_file = texture_file
 
 BLOCKS = {}
 BLOCKS["GRASS"] = Block("grass.png")
@@ -462,86 +463,95 @@ class Model(object):
             self._dequeue()
 
 class MenuItem(object):
-	def __init__(self, window, image, pos_x, pos_y):
-		item_image = pyglet.image.load(image)
-		item = pyglet.sprite.Sprite(item_image, x=pos_x, y=pos_y)
-		window.drawregister.add(item.draw)
+    def __init__(self, window, image_file, pos_x, pos_y):
+        self.image_file = image_file
+        self.pos_x = pos_x
+        self.pos_y = pos_y
+        item_image = pyglet.image.load(image_file)
+        item = pyglet.sprite.Sprite(item_image, x=pos_x, y=pos_y)
+        window.drawregister.add(item.draw)
 
 class MenuItemManager(object):
-	def __init__(self, window):
-		self.items = []
-		self.menu_position_x = 50
-		self.menu_position_y = 50
-		self.menu_item_size_x = 50
-		self.menu_item_size_y = 50
-		self.window = window
+    def __init__(self, window):
+        self.window = window
+        self.items = []
+        self.menu_position_x = 50
+        self.menu_position_y = 50
+        self.menu_item_size_x = 50
+        self.menu_item_size_y = 50
 
-	def addItem(self, image):
-		item_x = len(self.items) * self.menu_item_size_x + self.menu_position_x
-		item_y = self.menu_position_y
+    def addItem(self, image):
+        for i in self.items:
+            if i.image_file == "empty.png":
+                i = MenuItem(self.window, i.image_file, i.pos_x, i.pos_y)
 
-		self.items.append(MenuItem(self.window, image, item_x, item_y))
+        item_x = len(self.items) * self.menu_item_size_x + self.menu_position_x
+        item_y = self.menu_position_y
+        self.items.append(MenuItem(self.window, image, item_x, item_y))
+        return len(self.items)-1
+
+    def removeItem(self, index):
+        self.items[index] = MenuItem(self.window, "empty.png", self.items[index].pos_x, self.items[index].pos_y)
 
 
 class UI(object):
-	def __init__(self):
-		self.itemkeypressed = []
-		self.menu_item_manager = MenuItemManager(WINDOW)
+    def __init__(self, window):
+        self.window = window
+        self.itemkeypressed = []
+        self.menu_item_manager = MenuItemManager(window)
 
-		self.menu_item_manager.addItem("picaxe.png")
-		self.menu_item_manager.addItem("picaxe.png")
-
-	def informItemKeyPressed(self, keyNum):
-		self.test = pyglet.text.Label(
-			str(keyNum),
-			font_name='Times New Roman',
+    def informItemKeyPressed(self, keyNum):
+        self.test = pyglet.text.Label(
+            str(keyNum),
+            font_name='Times New Roman',
             font_size=36,
-            x=WINDOW.width//2, y=WINDOW.height//2,
+            x=self.window.width//2, y=self.window.height//2,
             anchor_x='center', anchor_y='center')
 
-		for el in self.itemkeypressed:
-			WINDOW.drawregister.remove(el)
-			self.itemkeypressed.remove(el)
+        for el in self.itemkeypressed:
+            self.window.drawregister.remove(el)
+            self.itemkeypressed.remove(el)
 
-		WINDOW.drawregister.add(self.test.draw)
-		WINDOW.drawregister.removeAfter(self.test.draw, 1)
-		self.itemkeypressed.append(self.test.draw)
+        self.window.drawregister.add(self.test.draw)
+        self.window.drawregister.removeAfter(self.test.draw, 1)
+        self.itemkeypressed.append(self.test.draw)
 
-		
+        
 
 class DrawRegister(object):
-	def __init__(self):
-		self.drawregister = []
+    def __init__(self):
+        self.drawregister = []
 
-	# func is the function passed as an object, to be added to the draw register.
-	# exceptions handled internally.
-	def add(self, func):
-		self.drawregister.append(func)
+    # func is the function passed as an object, to be added to the draw register.
+    # exceptions handled internally.
+    def add(self, func):
+        self.drawregister.append(func)
 
-	# func is the function passed as an object,
-	#   to be removed 's' seconds after this is called.
-	def removeAfter(self, func, s):
-		def waitAndRemove():
-			time.sleep(s)
-			try:
-				self.remove(func)
-			except:
-				pass
-		thread.start_new_thread(waitAndRemove, ())
+    # func is the function passed as an object,
+    #   to be removed 's' seconds after this is called.
+    def removeAfter(self, func, s):
+        def waitAndRemove():
+            time.sleep(s)
+            try:
+                self.remove(func)
+            except:
+                pass
+        thread.start_new_thread(waitAndRemove, ())
 
-	def remove(self, func):
-		try:
-			self.drawregister.remove(func)
-		except:
-			pass
+    def remove(self, func):
+        try:
+            self.drawregister.remove(func)
+        except:
+            pass
 
 # All inventory items can be "dropped" and "used"
 class InventoryItem(object):
     # max_qty represents the max items that can fit in a stack.
-    def __init__(self, name, max_qty):
+    def __init__(self, name, max_qty, ui_texture):
         self.name = name
         self.max_qty = max_qty
         self.qty = 1 # Default quantity is 1
+        self.ui_texture = ui_texture
     @abstractmethod
     def use(self, params):
         pass
@@ -554,8 +564,8 @@ class InventoryItem_Block(InventoryItem):
         if(name == False):
             name = blocktype
         # Max quantity of a stack of blocks is 64.
-        super(InventoryItem_Block, self).__init__(name, 64)
         self.worldblock = BLOCKS[blocktype]
+        super(InventoryItem_Block, self).__init__(name, 64, self.worldblock.texture_file)
     def use(self, params):
         # Place the block
         if(self.qty > 0):
@@ -579,15 +589,18 @@ def getInventoryItemBlockFromWorldBlockPosition(worldblockposition):
 class InventoryItem_MultiTool(InventoryItem):
     def __init__(self, name="MultiTool"):
         # Max quantity of a stack of multi-tools is 1.
-        super(InventoryItem_MultiTool, self).__init__(name, 1)
+        super(InventoryItem_MultiTool, self).__init__(name, 1, "picaxe.png")
 
     def use(self, params):
         item = getInventoryItemBlockFromWorldBlockPosition(params)
         if(item != False):
             config.InventoryItem_MultiTool_use(params, item)
 
+# Contains common inventory logic, such as stacking
+#   and unstacking inventory items.
 class Inventory(object):
-    def __init__(self):
+    def __init__(self, window):
+        self.window = window
         self.inventory = []
     def add(self, item, qty=1):
         for i in self.inventory:
@@ -600,6 +613,7 @@ class Inventory(object):
                 i = item
                 return
         self.inventory.append(item)
+        item.ui_position = self.window.UI.menu_item_manager.addItem(item.ui_texture)
     def remove(self, item, qty=1):
         for i in self.inventory:
             if(i.name == item.name and i.qty > 1):
@@ -611,13 +625,14 @@ class Inventory(object):
             for i in self.inventory:
                 if(i.name == item.name):
                     i = False
+                    ui.menu_item_manager.removeItem(item.ui_position)
         except:
             return
 
 class Player(object):
-    def __init__(self):
+    def __init__(self, window):
         #self.inventory = [InventoryItem_Block("BRICK"), InventoryItem_Block("GRASS"), InventoryItem_Block("SAND")]
-        self.inventory = Inventory()
+        self.inventory = Inventory(window)
         self.inventory.add(InventoryItem_MultiTool())
         self.selected = self.inventory.inventory[0]
 
@@ -625,8 +640,6 @@ class Window(pyglet.window.Window):
 
     def __init__(self, *args, **kwargs):
         super(Window, self).__init__(*args, **kwargs)
-
-        self.player = Player()
 
         # Whether or not the window exclusively captures the mouse.
         self.exclusive = False
@@ -681,6 +694,9 @@ class Window(pyglet.window.Window):
         # This call schedules the `update()` method to be called
         # TICKS_PER_SEC. This is the main game event loop.
         pyglet.clock.schedule_interval(self.update, 1.0 / TICKS_PER_SEC)
+
+        self.UI = UI(self)
+        self.player = Player(self)
 
     def set_exclusive_mouse(self, exclusive):
         """ If `exclusive` is True, the game will capture the mouse, if False
@@ -1010,7 +1026,7 @@ class Window(pyglet.window.Window):
 
         # Draw everything that's been added to the drawregister.
         for reg in self.drawregister.drawregister:
-        	reg()
+            reg()
 
     def draw_focused_block(self):
         """ Draw black edges around the block that is currently under the
@@ -1085,8 +1101,6 @@ def setup():
 
 def main():
     __builtin__.WINDOW = Window(width=800, height=600, caption='Pyglet', resizable=True)
-    global ui
-    ui = UI()
     # Hide the mouse cursor and prevent the mouse from leaving the WINDOW.
     WINDOW.set_exclusive_mouse(True)
     setup()
