@@ -8,6 +8,7 @@ from pyglet import image
 from pyglet.gl import *
 from pyglet.graphics import TextureGroup
 from pyglet.window import key, mouse
+from abc import ABCMeta, abstractmethod
 
 TICKS_PER_SEC = 60
 
@@ -55,7 +56,7 @@ def tex_coord(x, y, n=1):
     return dx, dy, dx + m, dy, dx + m, dy + m, dx, dy + m
 
 
-def tex_coords(top, bottom, side):
+def tex_coords(top=(0,0), bottom=(0,0), side=(0,0)):
     """ Return a list of the texture squares for the top, bottom and side.
 
     """
@@ -94,17 +95,19 @@ class TextureGroupManager(object):
         return x
 textureGroupManager = TextureGroupManager()
 
+# An instance of Block exists for each available block type.
+# Attributes of Block are shared where it's necessary to optimize.
 class Block(object):
-    def __init__(self, texture_coords, texture_file):
-        self.texture_coords = texture_coords
+    def __init__(self, texture_file):
+        self.texture_coords = tex_coords()
         self.baseTextureGroup = textureGroupManager.loadTexture(texture_file)
         self.group = self.baseTextureGroup.group
 
 BLOCKS = {}
-BLOCKS["GRASS"] = Block(tex_coords((0, 0), (0, 0), (0, 0)), "grass.png")
-BLOCKS["SAND"] = Block(tex_coords((0, 0), (0, 0), (0, 0)), "sand.png")
-BLOCKS["BRICK"] = Block(tex_coords((0, 0), (0, 0), (0, 0)), "brick.png")
-BLOCKS["STONE"] = Block(tex_coords((0, 0), (0, 0), (0, 0)), "stone.png")
+BLOCKS["GRASS"] = Block("grass.png")
+BLOCKS["SAND"] = Block("sand.png")
+BLOCKS["BRICK"] = Block("brick.png")
+BLOCKS["STONE"] = Block("stone.png")
 
 FACES = [
     ( 0, 1, 0),
@@ -476,10 +479,9 @@ class MenuItemManager(object):
 
 
 class UI(object):
-	def __init__(self, window):
-		self.window = window
+	def __init__(self):
 		self.itemkeypressed = []
-		self.menu_item_manager = MenuItemManager(window)
+		self.menu_item_manager = MenuItemManager(WINDOW)
 
 		self.menu_item_manager.addItem("picaxe.png")
 		self.menu_item_manager.addItem("picaxe.png")
@@ -489,15 +491,15 @@ class UI(object):
 			str(keyNum),
 			font_name='Times New Roman',
             font_size=36,
-            x=window.width//2, y=window.height//2,
+            x=WINDOW.width//2, y=WINDOW.height//2,
             anchor_x='center', anchor_y='center')
 
 		for el in self.itemkeypressed:
-			window.drawregister.remove(el)
+			WINDOW.drawregister.remove(el)
 			self.itemkeypressed.remove(el)
 
-		window.drawregister.add(self.test.draw)
-		window.drawregister.removeAfter(self.test.draw, 1)
+		WINDOW.drawregister.add(self.test.draw)
+		WINDOW.drawregister.removeAfter(self.test.draw, 1)
 		self.itemkeypressed.append(self.test.draw)
 
 		
@@ -528,10 +530,46 @@ class DrawRegister(object):
 		except:
 			pass
 
+# All inventory items can be "dropped" and "used"
+class InventoryItem(object):
+    # max_qty represents the max items that can fit in a stack.
+    def __init__(self, name, max_qty):
+        self.name = name
+        self.max_qty = max_qty
+        self.qty = 1 # Default quantity is 1
+    @abstractmethod
+    def use(self, params):
+        pass
+    # Drop always behaves in the same way, so it's not abstract.
+    def drop(self):
+        pass
+
+class InventoryItem_Block(InventoryItem):
+    def __init__(self, blocktype, name=False):
+        if(name == False):
+            name = blocktype
+
+        # Max quantity of a stack of blocks is 64.
+        super(InventoryItem_Block, self).__init__(name, 64)
+        self.worldblock = BLOCKS[blocktype]
+    def use(self, params):
+        # Place the block
+        WINDOW.model.add_block(params, self.worldblock)
+
+class InventoryItem_MultiTool(InventoryItem):
+    def __init__(self, name="MultiTool"):
+        # Max quantity of a stack of multi-tools is 1.
+        super(InventoryItem_MultiTool, self).__init__(name, 1)
+
+    def use(self, params):
+        # Try to swing at a block
+        WINDOW.model.remove_block(params)
+
 class Player(object):
-	def __init__(self):
-		self.inventory = [BLOCKS["BRICK"], BLOCKS["GRASS"], BLOCKS["SAND"]]
-		self.block = self.inventory[0]
+    def __init__(self):
+        self.inventory = [InventoryItem_Block("BRICK"), InventoryItem_Block("GRASS"), InventoryItem_Block("SAND")]
+        #self.inventory = [InventoryItem_MultiTool()]
+        self.selected = self.inventory[0]
 
 class Window(pyglet.window.Window):
 
@@ -779,11 +817,13 @@ class Window(pyglet.window.Window):
                     ((button == mouse.LEFT) and (modifiers & key.MOD_CTRL)):
                 # ON OSX, control + left click = right click.
                 if previous:
-                    self.model.add_block(previous, self.player.block)
+                    #self.model.add_block(previous, self.player.block)
+                    self.player.selected.use(previous)
             elif button == pyglet.window.mouse.LEFT and block:
                 texture = self.model.world[block]
                 if texture != BLOCKS["STONE"]:
-                    self.model.remove_block(block)
+                    #self.model.remove_block(block)
+                    self.player.selected.use(block)
         else:
             self.set_exclusive_mouse(True)
 
@@ -835,7 +875,7 @@ class Window(pyglet.window.Window):
             self.flying = not self.flying
         elif symbol in self.num_keys:
             index = (symbol - self.num_keys[0]) % len(self.player.inventory)
-            self.player.block = self.player.inventory[index]
+            self.player.selected = self.player.inventory[index]
             ui.informItemKeyPressed(index)
 
     def on_key_release(self, symbol, modifiers):
@@ -994,12 +1034,12 @@ def setup():
 
 
 def main():
-    global window
-    window = Window(width=800, height=600, caption='Pyglet', resizable=True)
+    global WINDOW
+    WINDOW = Window(width=800, height=600, caption='Pyglet', resizable=True)
     global ui
-    ui = UI(window)
-    # Hide the mouse cursor and prevent the mouse from leaving the window.
-    window.set_exclusive_mouse(True)
+    ui = UI()
+    # Hide the mouse cursor and prevent the mouse from leaving the WINDOW.
+    WINDOW.set_exclusive_mouse(True)
     setup()
     pyglet.app.run()
 
