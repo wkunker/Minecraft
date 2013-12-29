@@ -3,12 +3,17 @@ import random
 import time
 import thread
 
+import config
+
 from collections import deque
 from pyglet import image
 from pyglet.gl import *
 from pyglet.graphics import TextureGroup
 from pyglet.window import key, mouse
 from abc import ABCMeta, abstractmethod
+import __builtin__
+
+__builtin__.WINDOW = False
 
 TICKS_PER_SEC = 60
 
@@ -579,8 +584,7 @@ class InventoryItem_MultiTool(InventoryItem):
     def use(self, params):
         item = getInventoryItemBlockFromWorldBlockPosition(params)
         if(item != False):
-            WINDOW.player.inventory.add(item)
-            WINDOW.model.remove_block(params)
+            config.InventoryItem_MultiTool_use(params, item)
 
 class Inventory(object):
     def __init__(self):
@@ -1080,8 +1084,7 @@ def setup():
 
 
 def main():
-    global WINDOW
-    WINDOW = Window(width=800, height=600, caption='Pyglet', resizable=True)
+    __builtin__.WINDOW = Window(width=800, height=600, caption='Pyglet', resizable=True)
     global ui
     ui = UI()
     # Hide the mouse cursor and prevent the mouse from leaving the WINDOW.
