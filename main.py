@@ -548,7 +548,6 @@ class InventoryItem_Block(InventoryItem):
     def __init__(self, blocktype, name=False):
         if(name == False):
             name = blocktype
-
         # Max quantity of a stack of blocks is 64.
         super(InventoryItem_Block, self).__init__(name, 64)
         self.worldblock = BLOCKS[blocktype]
@@ -556,19 +555,28 @@ class InventoryItem_Block(InventoryItem):
         # Place the block
         WINDOW.model.add_block(params, self.worldblock)
 
+def getInventoryItemBlockFromWorldBlockPosition(worldblockposition):
+    blocks = {}
+    for k,v in BLOCKS.iteritems():
+        blocks[k] = InventoryItem_Block(k)
+    for k,v in blocks.iteritems():
+        if(WINDOW.model.world[worldblockposition] == BLOCKS[k]):
+            return blocks[k]
+    return False
+
 class InventoryItem_MultiTool(InventoryItem):
     def __init__(self, name="MultiTool"):
         # Max quantity of a stack of multi-tools is 1.
         super(InventoryItem_MultiTool, self).__init__(name, 1)
 
     def use(self, params):
-        # Try to swing at a block
+        WINDOW.player.inventory.append(getInventoryItemBlockFromWorldBlockPosition(params))
         WINDOW.model.remove_block(params)
 
 class Player(object):
     def __init__(self):
-        self.inventory = [InventoryItem_Block("BRICK"), InventoryItem_Block("GRASS"), InventoryItem_Block("SAND")]
-        #self.inventory = [InventoryItem_MultiTool()]
+        #self.inventory = [InventoryItem_Block("BRICK"), InventoryItem_Block("GRASS"), InventoryItem_Block("SAND")]
+        self.inventory = [InventoryItem_MultiTool()]
         self.selected = self.inventory[0]
 
 class Window(pyglet.window.Window):
