@@ -470,6 +470,7 @@ class MenuItem(object):
         item_image = pyglet.image.load(image_file)
         item = pyglet.sprite.Sprite(item_image, x=pos_x, y=pos_y)
         window.drawregister.add(item.draw)
+        self.item_draw = item.draw
 
 class MenuItemManager(object):
     def __init__(self, window):
@@ -477,13 +478,14 @@ class MenuItemManager(object):
         self.items = []
         self.menu_position_x = 50
         self.menu_position_y = 50
-        self.menu_item_size_x = 50
-        self.menu_item_size_y = 50
+        self.menu_item_size_x = 80
+        self.menu_item_size_y = 80
 
     def addItem(self, image):
         for i in self.items:
             if i.image_file == "empty.png":
-                i = MenuItem(self.window, i.image_file, i.pos_x, i.pos_y)
+                i = MenuItem(self.window, image, item_x, item_y)
+                return
 
         item_x = len(self.items) * self.menu_item_size_x + self.menu_position_x
         item_y = self.menu_position_y
@@ -491,6 +493,7 @@ class MenuItemManager(object):
         return len(self.items)-1
 
     def removeItem(self, index):
+        self.window.drawregister.remove(self.items[index].item_draw)
         self.items[index] = MenuItem(self.window, "empty.png", self.items[index].pos_x, self.items[index].pos_y)
 
 
@@ -625,7 +628,7 @@ class Inventory(object):
             for i in self.inventory:
                 if(i.name == item.name):
                     i = False
-                    ui.menu_item_manager.removeItem(item.ui_position)
+                    self.window.UI.menu_item_manager.removeItem(item.ui_position)
         except:
             return
 
@@ -942,7 +945,7 @@ class Window(pyglet.window.Window):
         elif symbol in self.num_keys:
             index = (symbol - self.num_keys[0]) % len(self.player.inventory.inventory)
             self.player.selected = self.player.inventory.inventory[index]
-            ui.informItemKeyPressed(index)
+            self.UI.informItemKeyPressed(index)
 
     def on_key_release(self, symbol, modifiers):
         """ Called when the player releases a key. See pyglet docs for key
