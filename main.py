@@ -578,6 +578,8 @@ class InventoryItem_Block(InventoryItem):
         if(self.qty > 0):
             WINDOW.model.add_block(params, self.worldblock)
             self.qty -= 1
+            if self.qty <= 0:
+                WINDOW.player.inventory.remove(self)
         else:
             WINDOW.player.inventory.remove(self)
 
