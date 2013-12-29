@@ -570,14 +570,33 @@ class InventoryItem_MultiTool(InventoryItem):
         super(InventoryItem_MultiTool, self).__init__(name, 1)
 
     def use(self, params):
-        WINDOW.player.inventory.append(getInventoryItemBlockFromWorldBlockPosition(params))
+        WINDOW.player.inventory.add(getInventoryItemBlockFromWorldBlockPosition(params))
         WINDOW.model.remove_block(params)
+
+class Inventory(object):
+    def __init__(self):
+        self.inventory = []
+    def add(self, item, qty=1):
+        for i in self.inventory:
+            if(i == item and i.qty < i.max_qty):
+                i.qty += qty
+                return
+        # object wasn't found in inventory
+        self.inventory.append(item)
+    def remove(self, item, qty=1):
+        for i in self.inventory:
+            if(i == item and i.qty > 1):
+                i.qty -= qty
+                return
+        # object wasn't found in inventory
+        self.inventory.remove(item)
 
 class Player(object):
     def __init__(self):
         #self.inventory = [InventoryItem_Block("BRICK"), InventoryItem_Block("GRASS"), InventoryItem_Block("SAND")]
-        self.inventory = [InventoryItem_MultiTool()]
-        self.selected = self.inventory[0]
+        self.inventory = Inventory()
+        self.inventory.add(InventoryItem_MultiTool())
+        self.selected = self.inventory.inventory[0]
 
 class Window(pyglet.window.Window):
 
@@ -882,8 +901,8 @@ class Window(pyglet.window.Window):
         elif symbol == key.TAB:
             self.flying = not self.flying
         elif symbol in self.num_keys:
-            index = (symbol - self.num_keys[0]) % len(self.player.inventory)
-            self.player.selected = self.player.inventory[index]
+            index = (symbol - self.num_keys[0]) % len(self.player.inventory.inventory)
+            self.player.selected = self.player.inventory.inventory[index]
             ui.informItemKeyPressed(index)
 
     def on_key_release(self, symbol, modifiers):
