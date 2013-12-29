@@ -591,6 +591,10 @@ class Inventory(object):
                 i.qty += qty
                 return
         # object wasn't found in inventory
+        for i in self.inventory:
+            if(i == False):
+                i = item
+                return
         self.inventory.append(item)
     def remove(self, item, qty=1):
         for i in self.inventory:
@@ -599,7 +603,10 @@ class Inventory(object):
                 return
         # object wasn't found in inventory
         try:
-            self.inventory.remove(item)
+            #self.inventory.remove(item)
+            for i in self.inventory:
+                if(i.name == item.name):
+                    i = False
         except:
             return
 
