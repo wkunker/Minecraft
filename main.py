@@ -21,6 +21,7 @@ TICKS_PER_SEC = 60
 SECTOR_SIZE = 16
 
 WALKING_SPEED = 5
+ACTUAL_WALKING_SPEED = WALKING_SPEED
 FLYING_SPEED = 15
 
 GRAVITY = 20.0
@@ -809,7 +810,7 @@ class Window(pyglet.window.Window):
 
         """
         # walking
-        speed = FLYING_SPEED if self.flying else WALKING_SPEED
+        speed = FLYING_SPEED if self.flying else ACTUAL_WALKING_SPEED
         d = dt * speed # distance covered this tick.
         dx, dy, dz = self.get_motion_vector()
         # New position in space, before accounting for gravity.
@@ -957,6 +958,11 @@ class Window(pyglet.window.Window):
             index = (symbol - self.num_keys[0]) % len(self.player.inventory.inventory)
             self.player.selected = self.player.inventory.inventory[index]
             self.UI.informItemKeyPressed(index)
+        global ACTUAL_WALKING_SPEED
+        if modifiers & key.LSHIFT:
+            ACTUAL_WALKING_SPEED = 2
+        else:
+            ACTUAL_WALKING_SPEED = 5
 
     def on_key_release(self, symbol, modifiers):
         """ Called when the player releases a key. See pyglet docs for key
@@ -978,6 +984,11 @@ class Window(pyglet.window.Window):
             self.strafe[1] += 1
         elif symbol == key.D:
             self.strafe[1] -= 1
+        global ACTUAL_WALKING_SPEED
+        if modifiers & key.LSHIFT:
+            ACTUAL_WALKING_SPEED = 2
+        else:
+            ACTUAL_WALKING_SPEED = 5
 
     def on_resize(self, width, height):
         """ Called when the window is resized to a new `width` and `height`.
