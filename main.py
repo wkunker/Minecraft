@@ -485,7 +485,7 @@ class MenuItemManager(object):
         for k,i in enumerate(self.items):
             if i.image_file == "empty.png":
                 if inventory_position != False:
-                    self.items[k] = MenuItem(self.window, image, inventory_position, i.pos_y)
+                    self.items[k] = MenuItem(self.window, image, inventory_position * self.menu_item_size_x + self.menu_position_x, i.pos_y)
                     return k
                 self.items[k] = MenuItem(self.window, image, i.pos_x, i.pos_y)
                 return k
