@@ -481,9 +481,12 @@ class MenuItemManager(object):
         self.menu_item_size_x = 80
         self.menu_item_size_y = 80
 
-    def addItem(self, image):
+    def addItem(self, image, inventory_position=False):
         for k,i in enumerate(self.items):
             if i.image_file == "empty.png":
+                if inventory_position != False:
+                    self.items[k] = MenuItem(self.window, image, inventory_position, i.pos_y)
+                    return k
                 self.items[k] = MenuItem(self.window, image, i.pos_x, i.pos_y)
                 return k
         item_x = len(self.items) * self.menu_item_size_x + self.menu_position_x
@@ -619,7 +622,7 @@ class Inventory(object):
                     item.ui_position = self.window.UI.menu_item_manager.addItem(item.ui_texture)
                 return
         # object wasn't found in inventory
-        item.ui_position = self.window.UI.menu_item_manager.addItem(item.ui_texture)
+        item.ui_position = self.window.UI.menu_item_manager.addItem(item.ui_texture, len(self.inventory))
         for i in self.inventory:
             if(i == False):
                 i = item
