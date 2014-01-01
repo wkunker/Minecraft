@@ -888,12 +888,16 @@ class Window(pyglet.window.Window):
                 # ON OSX, control + left click = right click.
                 if previous:
                     #self.model.add_block(previous, self.player.block)
-                    self.player.selected.use(previous)
+                    #self.player.selected.use(previous)
+                    pass
             elif button == pyglet.window.mouse.LEFT and block:
                 texture = self.model.world[block]
-                if texture != BLOCKS["STONE"]:
-                    #self.model.remove_block(block)
-                    self.player.selected.use(block)
+                if issubclass(self.player.selected.__class__, InventoryItem_Block):
+                    if previous:
+                        self.player.selected.use(previous)
+                else:
+                    if texture != BLOCKS["STONE"]:
+                        self.player.selected.use(block)
         else:
             self.set_exclusive_mouse(True)
 
