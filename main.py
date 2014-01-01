@@ -485,15 +485,13 @@ class MenuItemManager(object):
     def addItem(self, image, inventory_position):
         for k,i in enumerate(self.items):
             if i.image_file == "empty.png":
-                if inventory_position != False:
-                    self.items[k] = MenuItem(self.window, image, inventory_position * self.menu_item_size_x + self.menu_position_x, i.pos_y)
-                    return k
-                self.items[k] = MenuItem(self.window, image, i.pos_x, i.pos_y)
+                self.items[k] = MenuItem(self.window, image, inventory_position * self.menu_item_size_x + self.menu_position_x, i.pos_y)
                 return k
-        item_x = len(self.items) * self.menu_item_size_x + self.menu_position_x
+        item_x = inventory_position * self.menu_item_size_x + self.menu_position_x
         item_y = self.menu_position_y
         self.items.append(MenuItem(self.window, image, item_x, item_y))
-        return len(self.items)-1
+        return inventory_position
+		#return len(self.items) ## was this before
 
     def removeItem(self, index):
         self.window.drawregister.remove(self.items[index].item_draw)
@@ -615,34 +613,25 @@ class Inventory(object):
     def __init__(self, window):
         self.window = window
         self.inventory = []
+        a = 0
+        while a < 10:
+            a += 1
+            self.inventory.append(False)
     def add(self, item, qty=1):
         for k,i in enumerate(self.inventory):
-            if(i.name == item.name and i.qty < i.max_qty):
-                self.inventory[k].qty += qty
-                if self.window.UI.menu_item_manager.findItem(item.ui_texture) == False:
-                    item.ui_position = self.window.UI.menu_item_manager.addItem(item.ui_texture, k)
-                return
-        # object wasn't found in inventory
-        item.ui_position = self.window.UI.menu_item_manager.addItem(item.ui_texture, len(self.inventory))
-        for i in self.inventory:
             if(i == False):
-                i = item
+                item.ui_position = self.window.UI.menu_item_manager.addItem(item.ui_texture, k)
+                self.inventory[k] = item
                 return
         self.inventory.append(item)
     def remove(self, item, qty=1):
-        for i in self.inventory:
-            if(i.name == item.name and i.qty > 1):
-                i.qty -= qty
-                return
-        # object wasn't found in inventory
-        try:
-            #self.inventory.remove(item)
-            for i in self.inventory:
+        print "REMOVE:::" + str(item.ui_position)
+        for a,i in enumerate(self.inventory):
+            if(i != False):
                 if(i.name == item.name):
-                    i = False
-                    self.window.UI.menu_item_manager.removeItem(item.ui_position)
-        except:
-            return
+                    self.window.UI.menu_item_manager.removeItem(a)
+                    self.inventory[a] = False
+                    return
 
 class Player(object):
     def __init__(self, window):
@@ -1049,9 +1038,16 @@ class Window(pyglet.window.Window):
         self.draw_label()
         self.draw_reticle()
 
+        # Enable alpha on objects (experimental)
+        #glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        #glEnable( GL_BLEND );
+        #glClearColor(0.0,0.0,0.0,0.0);
+
         # Draw everything that's been added to the drawregister.
         for reg in self.drawregister.drawregister:
             reg()
+
+
 
     def draw_focused_block(self):
         """ Draw black edges around the block that is currently under the
