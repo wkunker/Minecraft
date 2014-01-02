@@ -3,8 +3,6 @@ import random
 import time
 import thread
 
-import config
-
 from collections import deque
 from pyglet import image
 from pyglet.gl import *
@@ -117,6 +115,12 @@ BLOCKS["BRICK"] = Block("brick.png")
 BLOCKS["STONE"] = Block("stone.png")
 BLOCKS["WOOD"] = Block("wood.png")
 BLOCKS["STICK"] = Block("stick.png")
+
+RECIPES = {}
+RECIPES["stick"] = {}
+RECIPES["stick"]["column"] = [[], [], [], []]
+RECIPES["stick"]["column"][0] = [BLOCKS["WOOD"], BLOCKS["WOOD"]] # 2 wood blocks stacked on top of each other.
+RECIPES["stick"]["result"] = BLOCKS["STICK"]
 
 FACES = [
     ( 0, 1, 0),
@@ -919,13 +923,8 @@ class InventoryItem_MultiTool(InventoryItem):
     def use(self, params):
         item = getInventoryItemBlockFromWorldBlockPosition(params)
         if(item != False):
-            config.InventoryItem_MultiTool_use(params, item)
-
-RECIPES = {}
-RECIPES["stick"] = {}
-RECIPES["stick"]["column"] = [[], [], [], []]
-RECIPES["stick"]["column"][0] = [BLOCKS["WOOD"], BLOCKS["WOOD"]] # 2 wood blocks stacked on top of each other.
-RECIPES["stick"]["result"] = BLOCKS["STICK"]
+            WINDOW.player.inventory.add(item)
+            WINDOW.model.remove_block(params)
 
 class InventoryItem_AssemblerTool(InventoryItem):
     def __init__(self, name="AssemblerTool"):
