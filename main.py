@@ -115,6 +115,7 @@ BLOCKS["BRICK"] = Block("brick.png")
 BLOCKS["STONE"] = Block("stone.png")
 BLOCKS["WOOD"] = Block("wood.png")
 BLOCKS["STICK"] = Block("stick.png")
+BLOCKS["COAL"] = Block("coal.png")
 
 RECIPES = {}
 RECIPES["stick"] = {"column": [[BLOCKS["WOOD"], BLOCKS["WOOD"]], [], [], []], "result": BLOCKS["STICK"]} # 2 wood blocks stacked on top of each other.
@@ -196,18 +197,41 @@ class Model(object):
         """
         n = 80  # 1/2 width and height of world
         s = 1  # step size
-        y = 0  # initial y height
-        for x in xrange(-n, n + 1, s):
-            for z in xrange(-n, n + 1, s):
-                # create a layer stone an grass everywhere.
-                self.add_block((x, y - 2, z), BLOCKS["GRASS"], immediate=False)
-                self.add_block((x, y - 3, z), BLOCKS["STONE"], immediate=False)
-                if x in (-n, n) or z in (-n, n):
-                    # create outer walls.
-                    for dy in xrange(-2, 3):
-                        self.add_block((x, y + dy, z), BLOCKS["STONE"], immediate=False)
+        y = -100  # initial y height
+        max_depth = 10
+        h = 0
+        while h < max_depth:
+            h += 1
+
+            '''max_aint = 50
+            aint = random.randint(0, max_aint)
+            if aint <= 1: # 1% chance to switch terrain placement height.
+                bint = random.randint(0, 1)
+                cint = random.randint(0, 1)
+                if cint == 0:
+                    y -= bint
+                else:
+                    y += bint'''
+
+            for x in xrange(-n, n + 1, s):
+                for z in xrange(-n, n + 1, s):
+                    # create a layer stone an grass everywhere.                    
+                    rint = random.randint(0, 500)
+                    coal_drop_rate = 2 + h
+                    if rint >= coal_drop_rate:
+                        self.add_block((x, y - h, z), BLOCKS["GRASS"], immediate=False)
+                    elif rint >= coal_drop_rate + 200:
+                        self.add_block((x, y - h, z), BLOCKS["STONE"], immediate=False)
+                    else:
+                        self.add_block((x, y - h, z), BLOCKS["COAL"], immediate=False)
+
+                    if x in (-n, n) or z in (-n, n):
+                        # create outer walls.
+                        for dy in xrange(-2, 3):
+                            self.add_block((x, y + dy, z), BLOCKS["STONE"], immediate=False)
 
         # generate the hills randomly
+        '''
         o = n - 10
         for _ in xrange(120):
             a = random.randint(-o, o)  # x position of the hill
@@ -216,7 +240,17 @@ class Model(object):
             h = random.randint(1, 6)  # height of the hill
             s = random.randint(4, 8)  # 2 * s is the side length of the hill
             d = 1  # how quickly to taper off the hills
-            t = random.choice([BLOCKS["GRASS"], BLOCKS["SAND"], BLOCKS["BRICK"], BLOCKS["WOOD"]])
+            t_rand = random.randint(1, 100)
+            if t_rand < 21:
+                t = BLOCKS["GRASS"]
+            elif t_rand < 61:
+                t = BLOCKS["SAND"]
+            elif t_rand < 81:
+                t = BLOCKS["BRICK"]
+            else:
+                t = BLOCKS["WOOD"]
+
+            #t = random.choice([BLOCKS["GRASS"], BLOCKS["SAND"], BLOCKS["BRICK"], BLOCKS["WOOD"]])
             for y in xrange(c, c + h):
                 for x in xrange(a - s, a + s + 1):
                     for z in xrange(b - s, b + s + 1):
@@ -226,7 +260,7 @@ class Model(object):
                             continue
                         self.add_block((x, y, z), t, immediate=False)
                 s -= d  # decrement side lenth so hills taper off
-
+        '''
     def hit_test(self, position, vector, max_distance=8):
         """ Line of sight search from current position. If a block is
         intersected it is returned, along with the block previously in the line
@@ -1415,9 +1449,8 @@ class Window(pyglet.window.Window):
         self.draw_reticle()
 
         # Enable alpha on objects (experimental)
-        #glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        #glEnable( GL_BLEND );
-        #glClearColor(0.0,0.0,0.0,0.0);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glEnable( GL_BLEND );
 
         # Draw everything that's been added to the drawregister.
         for reg in self.drawregister.drawregister:
