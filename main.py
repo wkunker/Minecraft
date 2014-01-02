@@ -117,10 +117,7 @@ BLOCKS["WOOD"] = Block("wood.png")
 BLOCKS["STICK"] = Block("stick.png")
 
 RECIPES = {}
-RECIPES["stick"] = {}
-RECIPES["stick"]["column"] = [[], [], [], []]
-RECIPES["stick"]["column"][0] = [BLOCKS["WOOD"], BLOCKS["WOOD"]] # 2 wood blocks stacked on top of each other.
-RECIPES["stick"]["result"] = BLOCKS["STICK"]
+RECIPES["stick"] = {"column": [[BLOCKS["WOOD"], BLOCKS["WOOD"]], [], [], []], "result": BLOCKS["STICK"]} # 2 wood blocks stacked on top of each other.
 
 FACES = [
     ( 0, 1, 0),
