@@ -883,6 +883,7 @@ class InventoryItem_Block(InventoryItem):
                 WINDOW.player.inventory.remove(self)
         else:
             WINDOW.player.inventory.remove(self)
+        WINDOW.player.selected = WINDOW.player.inventory.findNewSelected()
 
 def getInventoryItemBlockFromWorldBlockPosition(worldblockposition):
     blocks = {}
@@ -925,7 +926,7 @@ class Inventory(object):
         self.window = window
         self.inventory = []
         a = 0
-        while a < 10:
+        while a < 9:
             a += 1
             self.inventory.append(False)
     def add(self, item, qty=1):
@@ -934,7 +935,8 @@ class Inventory(object):
                 item.ui_position = self.window.UI.menu_item_manager.addItem(item.ui_texture, k)
                 self.inventory[k] = item
                 return
-        self.inventory.append(item)
+        #self.inventory.append(item)
+        return
     def remove(self, item, qty=1):
         for a,i in enumerate(self.inventory):
             if(i != False):
