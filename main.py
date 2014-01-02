@@ -919,6 +919,17 @@ class InventoryItem_MultiTool(InventoryItem):
         if(item != False):
             config.InventoryItem_MultiTool_use(params, item)
 
+class InventoryItem_AssemblerTool(InventoryItem):
+    def __init__(self, name="AssemblerTool"):
+        # Max quantity of a stack of multi-tools is 1.
+        super(InventoryItem_AssemblerTool, self).__init__(name, 1, "assembler.png")
+
+    def use(self, params):
+        #item = getInventoryItemBlockFromWorldBlockPosition(params)
+        #if(item != False):
+        #config.InventoryItem_AssemblerTool_use(params, item)
+        pass
+
 # Contains common inventory logic, such as stacking
 #   and unstacking inventory items.
 class Inventory(object):
@@ -955,6 +966,7 @@ class Player(object):
         #self.inventory = [InventoryItem_Block("BRICK"), InventoryItem_Block("GRASS"), InventoryItem_Block("SAND")]
         self.inventory = Inventory(window)
         self.inventory.add(InventoryItem_MultiTool())
+        self.inventory.add(InventoryItem_AssemblerTool())
         self.selected = self.inventory.findNewSelected()
         self.window = window
     def pickup(self):
