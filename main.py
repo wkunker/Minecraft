@@ -115,6 +115,8 @@ BLOCKS["GRASS"] = Block("grass.png")
 BLOCKS["SAND"] = Block("sand.png")
 BLOCKS["BRICK"] = Block("brick.png")
 BLOCKS["STONE"] = Block("stone.png")
+BLOCKS["WOOD"] = Block("wood.png")
+BLOCKS["STICK"] = Block("stick.png")
 
 FACES = [
     ( 0, 1, 0),
@@ -213,7 +215,7 @@ class Model(object):
             h = random.randint(1, 6)  # height of the hill
             s = random.randint(4, 8)  # 2 * s is the side length of the hill
             d = 1  # how quickly to taper off the hills
-            t = random.choice([BLOCKS["GRASS"], BLOCKS["SAND"], BLOCKS["BRICK"]])
+            t = random.choice([BLOCKS["GRASS"], BLOCKS["SAND"], BLOCKS["BRICK"], BLOCKS["WOOD"]])
             for y in xrange(c, c + h):
                 for x in xrange(a - s, a + s + 1):
                     for z in xrange(b - s, b + s + 1):
@@ -919,16 +921,43 @@ class InventoryItem_MultiTool(InventoryItem):
         if(item != False):
             config.InventoryItem_MultiTool_use(params, item)
 
+RECIPES = {}
+RECIPES["stick"] = {}
+RECIPES["stick"]["column"] = [[], [], [], []]
+RECIPES["stick"]["column"][0] = [BLOCKS["WOOD"], BLOCKS["WOOD"]] # 2 wood blocks stacked on top of each other.
+RECIPES["stick"]["result"] = BLOCKS["STICK"]
+
 class InventoryItem_AssemblerTool(InventoryItem):
     def __init__(self, name="AssemblerTool"):
         # Max quantity of a stack of multi-tools is 1.
         super(InventoryItem_AssemblerTool, self).__init__(name, 1, "assembler.png")
 
+    # Use on the bottom-left block of the blocks-to-be-assembled.
     def use(self, params):
         #item = getInventoryItemBlockFromWorldBlockPosition(params)
         #if(item != False):
         #config.InventoryItem_AssemblerTool_use(params, item)
-        pass
+        for k,v in RECIPES.iteritems():
+            z = 0
+            success = True
+            all_pos = []
+            # Compare the stack of blocks against the current recipe
+            for y in v["column"][0]:
+                p = params[0], params[1] + z, params[2]
+                if WINDOW.model.world[p] != y:
+                    success = False
+                    break # break back to the main RECIPES for loop
+                all_pos.append(p)
+                z += 1
+            if success == True:
+                # This must be the recipe -- make it by destroying the input blocks, and creating the output item
+                for i in all_pos:
+                    WINDOW.model.remove_block(i)
+                ###### getInventoryItemBlockFromWorldBlockPosition(params)
+                WINDOW.world_items.add_block(params, v["result"])
+                return
+
+
 
 # Contains common inventory logic, such as stacking
 #   and unstacking inventory items.
