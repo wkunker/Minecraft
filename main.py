@@ -2,6 +2,14 @@ import math
 import random
 import time
 import thread
+import pygletreactor
+pygletreactor.install()
+
+import jsonpickle
+
+from twisted.spread import pb
+from twisted.internet import reactor
+from twisted.python import util
 
 from collections import deque
 from pyglet import image
@@ -9,6 +17,7 @@ from pyglet.gl import *
 from pyglet.graphics import TextureGroup
 from pyglet.window import key, mouse
 from abc import ABCMeta, abstractmethod
+
 import __builtin__
 
 __builtin__.WINDOW = False
@@ -1335,21 +1344,30 @@ class Window(pyglet.window.Window):
         """
         if symbol == key.W:
             self.strafe[0] -= 1
+            CLIENT.send(jsonpickle.encode(dict(msg="action", action="player.move.forward.start", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())), unpicklable=True))
         elif symbol == key.S:
             self.strafe[0] += 1
+            CLIENT.send(jsonpickle.encode(dict(msg="action", action="player.move.backwards.start", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())), unpicklable=True))
         elif symbol == key.A:
             self.strafe[1] -= 1
+            CLIENT.send(jsonpickle.encode(dict(msg="action", action="player.move.left.start", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())), unpicklable=True))
         elif symbol == key.D:
             self.strafe[1] += 1
+            CLIENT.send(jsonpickle.encode(dict(msg="action", action="player.move.right.start", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())), unpicklable=True))
         elif symbol == key.Q:
             self.player.selected.drop()
+            CLIENT.send(jsonpickle.encode(dict(msg="action", action="player.selected.drop", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())), unpicklable=True))
         elif symbol == key.E:
+            CLIENT.send(jsonpickle.encode(dict(msg="action", action="player.pickup", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())), unpicklable=True))
             self.player.pickup()
         elif symbol == key.SPACE:
             if self.dy == 0:
                 self.dy = JUMP_SPEED
+                CLIENT.send(jsonpickle.encode(dict(msg="action", action="player.jump", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())), unpicklable=True))
         elif symbol == key.ESCAPE:
-            self.set_exclusive_mouse(False)
+            #self.set_exclusive_mouse(False)
+            #CLIENT.send("client.disconnect")
+            reactor.stop()
         elif symbol == key.TAB:
             self.flying = not self.flying
         elif symbol in self.num_keys:
@@ -1376,12 +1394,16 @@ class Window(pyglet.window.Window):
         """
         if symbol == key.W:
             self.strafe[0] += 1
+            CLIENT.send(jsonpickle.encode(dict(msg="action", action="player.move.forward.stop", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())), unpicklable=True))
         elif symbol == key.S:
             self.strafe[0] -= 1
+            CLIENT.send(jsonpickle.encode(dict(msg="action", action="player.move.backwards.stop", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())), unpicklable=True))
         elif symbol == key.A:
             self.strafe[1] += 1
+            CLIENT.send(jsonpickle.encode(dict(msg="action", action="player.move.left.stop", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())), unpicklable=True))
         elif symbol == key.D:
             self.strafe[1] -= 1
+            CLIENT.send(jsonpickle.encode(dict(msg="action", action="player.move.right.stop", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())), unpicklable=True))
         global ACTUAL_WALKING_SPEED
         if modifiers & key.LSHIFT:
             ACTUAL_WALKING_SPEED = 2
@@ -1530,12 +1552,136 @@ def setup():
 
 
 def main():
+    global SERVER
+    global CLIENT
+    global STARTING_POSITION
+
+    STARTING_POSITION = (0, 0, 0)
+    LISTENSERVER = True
+
+    CLIENTSERVER = MultiplayerClientServer()
+    if LISTENSERVER == True:
+        SERVER = MultiplayerServerServer()
+        CLIENT = MultiplayerClientClient("localhost")
+    else:
+        SERVER = False
+        CLIENT = MultiplayerClientClient("server-ip-here")
+
     __builtin__.WINDOW = Window(width=800, height=600, caption='Pyglet', resizable=True)
     # Hide the mouse cursor and prevent the mouse from leaving the WINDOW.
     WINDOW.set_exclusive_mouse(True)
     setup()
-    pyglet.app.run()
+
+    #CLIENT.send("HELLO!")
+    reactor.run()
+
+class MultiplayerClientClient:
+    def __init__(self, addr):
+        self.factory = pb.PBClientFactory()
+        reactor.connectTCP(addr, 8770, self.factory)
+        import socket
+        j = dict(msg="init", addr=socket.gethostbyname(socket.gethostname()))
+        self.send(jsonpickle.encode(j, unpicklable=True))
+        #self.send('{ "msg": "init", "addr": "' + socket.gethostbyname(socket.gethostname()) + '" }')
+    def send(self, msg):
+        d = self.factory.getRootObject()
+        d.addCallback(lambda obj: obj.callRemote("receive", msg))
+        #d.addCallback(lambda echo: "server echoed: " + echo)
+
+class MultiplayerClientServer(pb.Root):
+    def __init__(self):
+        reactor.listenTCP(8771, pb.PBServerFactory(self))
+    def remote_receive(self, pkt):
+        j = jsonpickle.decode(pkt)
+
+        if j[u'msg'] == "uuid":
+            print "server provided uuid: " + j[u'uuid']
+        elif j[u'msg'] == "player.position":
+            print "server provided player.position: " + j[u'position']
+            splt = j[u'position'].split(",")
+            x = 0
+            while x < 3:
+                splt[x] = splt[x].replace("(", "").replace(")", "")
+                x += 1
+            WINDOW.position = (float(str(splt[0]).strip()), float(str(splt[1]).strip()), float(str(splt[2]).strip()))
+
+class MultiplayerServerClient:
+    def __init__(self, addr):
+        self.factory = pb.PBClientFactory()
+        reactor.connectTCP(addr, 8771, self.factory)
+    def send(self, msg):
+        d = self.factory.getRootObject()
+        d.addCallback(lambda obj: obj.callRemote("receive", msg))
+
+class MultiplayerServerServer(pb.Root):
+    def __init__(self):
+        self.clientList = []
+        reactor.listenTCP(8770, pb.PBServerFactory(self))
+    def remote_receive(self, pkt):
+        j = jsonpickle.decode(pkt)
+
+        try:
+            if j[u'msg'] == "init":
+                serverClient = MultiplayerServerClient(j[u'addr'])
+                import uuid
+                u = uuid.uuid4()
+                self.clientList.append(dict(uuid=u, server_client=serverClient))
+                serverClient.send(jsonpickle.encode(dict(msg="uuid", uuid=str(u)), unpicklable=True))
+                global STARTING_POSITION
+                serverClient.send(jsonpickle.encode(dict(msg="player.position", position=str(STARTING_POSITION)), unpicklable=True))
+            elif j[u'msg'] == "action":
+
+                print "SERVER ACTION: " + j[u'action']
+
+                if j[u'action'] == "player.move.forward.start":
+                    pass
+        except KeyError:
+            # Not actually true... Need to explicitly check for 'msg'
+            #print "Warning: Received packet without 'msg' attribute."
+            print "Warning: KeyError"
 
 
+'''
+class RegisterUser(Command):
+    arguments = [('test', String())]
+    response = [('t', String())]
+
+class Test(Protocol):
+    def dataReceived(self, data):
+        self.transport.write("got it! " + data)
+class TestFactory(Factory):
+    def buildProtocol(self, addr):
+        return Test()
+'''
+'''
+class MultiplayerClient:
+    def __init__(self):
+        self.connection = self.connect()
+        #self.connection.addCallback(self.connected)
+        ##self.connection.addErrback(err)
+    def connect(self):
+        endpoint = TCP4ClientEndpoint(reactor, "127.0.0.1", 8750)
+        factory = Factory()
+        #factory.protocol = AMP
+        return endpoint.connect(factory)
+    def connected(self, protocol):
+        #x = protocol.callRemote(RegisterUser, test="testuser")
+        #x = protocol.transport.write("testmessage")
+        #return x
+        pass
+
+class MultiplayerServer:
+    def __init__(self):
+        self.connection = self.connect()
+        #self.connection.addCallback(self.connected)
+        self.connection.addErrback(err)
+    def connect(self):
+        endpoint = TCP4ServerEndpoint(reactor, 8750)
+        factory = Factory()
+        factory.protocol = AMP
+        return endpoint.listen(factory)
+    def remote_RegisterUser(self, arg):
+        print "RegisterUser: " + arg
+'''
 if __name__ == '__main__':
     main()
