@@ -1056,7 +1056,7 @@ class NetworkPlayer(object):
         self.__firstrun = True
         self.setPosition(position)
         self.__firstrun = False
-        self.strafe = 0
+        self.strafe = [0,0]
     def setPosition(self, position):
         if(self.__firstrun == False):
             WINDOW.model.remove_block(self._position, immediate=True)
@@ -1737,10 +1737,10 @@ class MultiplayerServerServer(pb.Root):
     def broadcastWithinRange(self, pkt, distance, c_op=False):
         for c in self.clientList:
             if(c[u'uuid'] != pkt[u'uuid']):
-                if(getDistance(self.getClient(pkt[u'uuid']), c[u'network_player'].getPosition()) < distance):
+                if(getDistance(self.getClient(pkt[u'uuid'])[u'network_player'].getPosition(), c[u'network_player'].getPosition()) < distance):
                     if(c_op) != False:
                         c_op(c)
-                    c.send(jsonpickle.encode(pkt))
+                    c.server_client.send(jsonpickle.encode(pkt))
 
     def remote_receive(self, pkt):
         j = jsonpickle.decode(pkt)
