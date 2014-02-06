@@ -2,6 +2,7 @@ import math
 import random
 import time
 import thread
+import sys
 import pygletreactor
 pygletreactor.install()
 
@@ -825,7 +826,7 @@ class MenuItemManager(object):
         item_y = self.menu_position_y
         self.items.append(MenuItem(self.window, image, item_x, item_y))
         return inventory_position
-		#return len(self.items) ## was this before
+        #return len(self.items) ## was this before
 
     def removeItem(self, index):
         self.window.drawregister.remove(self.items[index].item_draw)
@@ -1047,6 +1048,87 @@ class Player(object):
         if(item != False):
             self.window.player.inventory.add(item)
             self.window.world_items.remove_block(previous)
+
+# Represents any player which is not the current player.
+class NetworkPlayer(object):
+    def __init__(self, position):
+        self.__firstrun = True
+        self.setPosition(position)
+        self.__firstrun = False
+        self.strafe = 0
+    def setPosition(self, position):
+        if(self.__firstrun == False):
+            WINDOW.model.remove_block(self._position, immediate=True)
+        self._position = position
+        WINDOW.model.add_block(position, BLOCKS["BRICK"], immediate=True)
+
+    def getPosition(self):
+        return self._position
+
+    def update(self, dt):
+        m = 8
+        dt = min(dt, 0.2)
+        for _ in xrange(m):
+            self._update(dt / m)
+
+    def _update(self, dt):
+        # walking
+        speed = FLYING_SPEED if self.flying else ACTUAL_WALKING_SPEED
+        d = dt * speed # distance covered this tick.
+        dx, dy, dz = self.get_motion_vector()
+        # New position in space, before accounting for gravity.
+        dx, dy, dz = dx * d, dy * d, dz * d
+        # gravity
+        if not self.flying:
+            # Update your vertical speed: if you are falling, speed up until you
+            # hit terminal velocity; if you are jumping, slow down until you
+            # start falling.
+            self.dy -= dt * GRAVITY
+            self.dy = max(self.dy, -TERMINAL_VELOCITY)
+            dy += self.dy * dt
+        # collisions
+        x, y, z = self.position
+        x, y, z = self.collide((x + dx, y + dy, z + dz), PLAYER_HEIGHT)
+        self.position = (x, y, z)
+
+    def get_motion_vector(self):
+        """ Returns the current motion vector indicating the velocity of the
+        NetworkPlayer.
+
+        Returns
+        -------
+        vector : tuple of len 3
+            Tuple containing the velocity in x, y, and z respectively.
+
+        """
+        if any(self.strafe):
+            x, y = self.rotation
+            strafe = math.degrees(math.atan2(*self.strafe))
+            y_angle = math.radians(y)
+            x_angle = math.radians(x + strafe)
+            if self.flying:
+                m = math.cos(y_angle)
+                dy = math.sin(y_angle)
+                if self.strafe[1]:
+                    # Moving left or right.
+                    dy = 0.0
+                    m = 1
+                if self.strafe[0] > 0:
+                    # Moving backwards.
+                    dy *= -1
+                # When you are flying up or down, you have less left and right
+                # motion.
+                dx = math.cos(x_angle) * m
+                dz = math.sin(x_angle) * m
+            else:
+                dy = 0.0
+                dx = math.cos(x_angle)
+                dz = math.sin(x_angle)
+        else:
+            dy = 0.0
+            dx = 0.0
+            dz = 0.0
+        return (dx, dy, dz)
 
 class Window(pyglet.window.Window):
 
@@ -1344,26 +1426,26 @@ class Window(pyglet.window.Window):
         """
         if symbol == key.W:
             self.strafe[0] -= 1
-            CLIENT.send(jsonpickle.encode(dict(msg="action", action="player.move.forward.start", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())), unpicklable=True))
+            CLIENT.send(dict(msg="action", action="player.move.forward.start", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())))
         elif symbol == key.S:
             self.strafe[0] += 1
-            CLIENT.send(jsonpickle.encode(dict(msg="action", action="player.move.backwards.start", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())), unpicklable=True))
+            CLIENT.send(dict(msg="action", action="player.move.backwards.start", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())))
         elif symbol == key.A:
             self.strafe[1] -= 1
-            CLIENT.send(jsonpickle.encode(dict(msg="action", action="player.move.left.start", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())), unpicklable=True))
+            CLIENT.send(dict(msg="action", action="player.move.left.start", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())))
         elif symbol == key.D:
             self.strafe[1] += 1
-            CLIENT.send(jsonpickle.encode(dict(msg="action", action="player.move.right.start", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())), unpicklable=True))
+            CLIENT.send(dict(msg="action", action="player.move.right.start", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())))
         elif symbol == key.Q:
             self.player.selected.drop()
-            CLIENT.send(jsonpickle.encode(dict(msg="action", action="player.selected.drop", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())), unpicklable=True))
+            CLIENT.send(dict(msg="action", action="player.selected.drop", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())))
         elif symbol == key.E:
-            CLIENT.send(jsonpickle.encode(dict(msg="action", action="player.pickup", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())), unpicklable=True))
+            CLIENT.send(dict(msg="action", action="player.pickup", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())))
             self.player.pickup()
         elif symbol == key.SPACE:
             if self.dy == 0:
                 self.dy = JUMP_SPEED
-                CLIENT.send(jsonpickle.encode(dict(msg="action", action="player.jump", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())), unpicklable=True))
+                CLIENT.send(dict(msg="action", action="player.jump", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())))
         elif symbol == key.ESCAPE:
             #self.set_exclusive_mouse(False)
             #CLIENT.send("client.disconnect")
@@ -1394,16 +1476,16 @@ class Window(pyglet.window.Window):
         """
         if symbol == key.W:
             self.strafe[0] += 1
-            CLIENT.send(jsonpickle.encode(dict(msg="action", action="player.move.forward.stop", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())), unpicklable=True))
+            CLIENT.send(dict(msg="action", action="player.move.forward.stop", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())))
         elif symbol == key.S:
             self.strafe[0] -= 1
-            CLIENT.send(jsonpickle.encode(dict(msg="action", action="player.move.backwards.stop", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())), unpicklable=True))
+            CLIENT.send(dict(msg="action", action="player.move.backwards.stop", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())))
         elif symbol == key.A:
             self.strafe[1] += 1
-            CLIENT.send(jsonpickle.encode(dict(msg="action", action="player.move.left.stop", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())), unpicklable=True))
+            CLIENT.send(dict(msg="action", action="player.move.left.stop", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())))
         elif symbol == key.D:
             self.strafe[1] -= 1
-            CLIENT.send(jsonpickle.encode(dict(msg="action", action="player.move.right.stop", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())), unpicklable=True))
+            CLIENT.send(dict(msg="action", action="player.move.right.stop", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector())))
         global ACTUAL_WALKING_SPEED
         if modifiers & key.LSHIFT:
             ACTUAL_WALKING_SPEED = 2
@@ -1564,6 +1646,9 @@ def main():
         SERVER = MultiplayerServerServer()
         CLIENT = MultiplayerClientClient("localhost")
     else:
+        if len(sys.argv) != 2:
+            print "Invalid number of arguments. IP address of desired server must be provided as the only argument."
+            return
         SERVER = False
         CLIENT = MultiplayerClientClient("server-ip-here")
 
@@ -1581,11 +1666,18 @@ class MultiplayerClientClient:
         reactor.connectTCP(addr, 8770, self.factory)
         import socket
         j = dict(msg="init", addr=socket.gethostbyname(socket.gethostname()))
-        self.send(jsonpickle.encode(j, unpicklable=True))
+        self.send(j, False) # No UUID before connecting--UUID provided by server.
         #self.send('{ "msg": "init", "addr": "' + socket.gethostbyname(socket.gethostname()) + '" }')
-    def send(self, msg):
+
+    # include_uuid: Attempts to add (or modify existing) the uuid of the client to the request before sending.
+    def send(self, msg, include_uuid=True):
         d = self.factory.getRootObject()
-        d.addCallback(lambda obj: obj.callRemote("receive", msg))
+        if include_uuid == True:
+            msg_fin = dict(msg)
+            msg_fin.update(uuid=self.uuid)
+        else:
+            msg_fin = msg
+        d.addCallback(lambda obj: obj.callRemote("receive", jsonpickle.encode(msg_fin, unpicklable=True)))
         #d.addCallback(lambda echo: "server echoed: " + echo)
 
 class MultiplayerClientServer(pb.Root):
@@ -1596,6 +1688,8 @@ class MultiplayerClientServer(pb.Root):
 
         if j[u'msg'] == "uuid":
             print "server provided uuid: " + j[u'uuid']
+            global CLIENT
+            CLIENT.uuid = j[u'uuid']
         elif j[u'msg'] == "player.position":
             print "server provided player.position: " + j[u'position']
             splt = j[u'position'].split(",")
@@ -1604,6 +1698,12 @@ class MultiplayerClientServer(pb.Root):
                 splt[x] = splt[x].replace("(", "").replace(")", "")
                 x += 1
             WINDOW.position = (float(str(splt[0]).strip()), float(str(splt[1]).strip()), float(str(splt[2]).strip()))
+        elif j[u'msg'] == "networkplayer.position":
+            pass
+
+# Get the distance between two three dimensional points (tuples).
+def getDistance(xyz1, xyz2):
+   return sqrt(math.pow(xyz1[0]-xyz2[0], 2) + math.pow(xyz1[1]-xyz2[1], 2) + math.pow(xyz1[2]-xyz2[2], 2))
 
 class MultiplayerServerClient:
     def __init__(self, addr):
@@ -1617,28 +1717,77 @@ class MultiplayerServerServer(pb.Root):
     def __init__(self):
         self.clientList = []
         reactor.listenTCP(8770, pb.PBServerFactory(self))
+
+    # Accepts a uuid (string) and attempts to find a client from the clientList.
+    def getClient(self, uuid):
+        for client in self.clientList:
+            #print "PRINTING DEBUG DICT: " + jsonpickle.encode(client, unpicklable=True)
+            if client[u'uuid'] == uuid:
+                return client
+        return False
+
+    # Broadcast a packet consisting of a dict, which contains uuid of the broadcaster.
+    # Optional c_op parameter accepts a function which gets called for each valid client found to broadcast to.
+    #   The current found client is passed into c_op when called.
+    def broadcastWithinRange(self, pkt, distance, c_op=False):
+        for c in self.clientList:
+            if(c[u'uuid'] != pkt[u'uuid']):
+                if(getDistance(self.getClient(pkt.uuid), c.network_player.getPosition()) < distance):
+                    if(c_op) != False:
+                        c_op(c)
+                    c.send(jsonpickle.encode(pkt))
+
     def remote_receive(self, pkt):
         j = jsonpickle.decode(pkt)
 
-        try:
-            if j[u'msg'] == "init":
-                serverClient = MultiplayerServerClient(j[u'addr'])
-                import uuid
-                u = uuid.uuid4()
-                self.clientList.append(dict(uuid=u, server_client=serverClient))
-                serverClient.send(jsonpickle.encode(dict(msg="uuid", uuid=str(u)), unpicklable=True))
-                global STARTING_POSITION
-                serverClient.send(jsonpickle.encode(dict(msg="player.position", position=str(STARTING_POSITION)), unpicklable=True))
-            elif j[u'msg'] == "action":
+        if j[u'msg'] == "init":
+            serverClient = MultiplayerServerClient(j[u'addr'])
+            import uuid
+            u = uuid.uuid4()
+            global STARTING_POSITION
+            np = NetworkPlayer(STARTING_POSITION)
+            self.clientList.append(dict(uuid=str(u), server_client=serverClient, network_player=np))
+            serverClient.send(jsonpickle.encode(dict(msg="uuid", uuid=str(u)), unpicklable=True))
+            serverClient.send(jsonpickle.encode(dict(msg="player.position", position=str(np.getPosition())), unpicklable=True))
+            self.broadcastWithinRange(dict(msg="networkplayer.position", uuid=j[u'uuid'], position=str(np.getPosition())), 10)
 
-                print "SERVER ACTION: " + j[u'action']
+        elif j[u'msg'] == "action":
+            print "SERVER ACTION: " + j[u'action']
 
-                if j[u'action'] == "player.move.forward.start":
-                    pass
-        except KeyError:
-            # Not actually true... Need to explicitly check for 'msg'
-            #print "Warning: Received packet without 'msg' attribute."
-            print "Warning: KeyError"
+            np = self.getClient(j[u'uuid'])[u'network_player']
+
+            if j[u'action'] == "player.move.forward.start":
+                def op(client):
+                    client.network_player.strafe[0] -= 1
+                self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
+            elif j[u'action'] == "player.move.forward.stop":
+                def op(client):
+                    client.network_player.strafe[0] += 1
+                self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
+            elif j[u'action'] == "player.move.backwards.start":
+                def op(client):
+                    client.network_player.strafe[0] += 1
+                self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
+            elif j[u'action'] == "player.move.backwards.stop":
+                def op(client):
+                    client.network_player.strafe[0] -= 1
+                self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
+            elif j[u'action'] == "player.move.left.start":
+                def op(client):
+                    client.network_player.strafe[1] -= 1
+                self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
+            elif j[u'action'] == "player.move.left.stop":
+                def op(client):
+                    client.network_player.strafe[1] += 1
+                self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
+            elif j[u'action'] == "player.move.right.start":
+                def op(client):
+                    client.network_player.strafe[1] += 1
+                self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
+            elif j[u'action'] == "player.move.right.stop":
+                def op(client):
+                    client.network_player.strafe[1] -= 1
+                self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
 
 
 '''
