@@ -1708,7 +1708,7 @@ class MultiplayerClientServer(pb.Root):
 
 # Get the distance between two three dimensional points (tuples).
 def getDistance(xyz1, xyz2):
-   return sqrt(math.pow(xyz1[0]-xyz2[0], 2) + math.pow(xyz1[1]-xyz2[1], 2) + math.pow(xyz1[2]-xyz2[2], 2))
+   return math.sqrt(math.pow(xyz1[0]-xyz2[0], 2) + math.pow(xyz1[1]-xyz2[1], 2) + math.pow(xyz1[2]-xyz2[2], 2))
 
 class MultiplayerServerClient:
     def __init__(self, addr):
