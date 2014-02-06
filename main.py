@@ -1740,7 +1740,7 @@ class MultiplayerServerServer(pb.Root):
                 if(getDistance(self.getClient(pkt[u'uuid'])[u'network_player'].getPosition(), c[u'network_player'].getPosition()) < distance):
                     if(c_op) != False:
                         c_op(c)
-                    c.server_client.send(jsonpickle.encode(pkt))
+                    c[u'server_client'].send(jsonpickle.encode(pkt))
 
     def remote_receive(self, pkt):
         j = jsonpickle.decode(pkt)
