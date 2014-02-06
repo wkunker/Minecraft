@@ -3,6 +3,7 @@ import random
 import time
 import thread
 import sys
+import pyglet
 import pygletreactor
 pygletreactor.install()
 
