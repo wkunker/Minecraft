@@ -1641,16 +1641,19 @@ def main():
     STARTING_POSITION = (0, 0, 0)
     LISTENSERVER = True
 
+    if len(sys.argv) == 2:
+        LISTENSERVER = False
+    elif len(sys.argv) > 2:
+        print "Too many arguments. To connect to a server, the IP address or hostname of the server must be provided as the only argument."
+        return
+
     CLIENTSERVER = MultiplayerClientServer()
     if LISTENSERVER == True:
         SERVER = MultiplayerServerServer()
         CLIENT = MultiplayerClientClient("localhost")
     else:
-        if len(sys.argv) != 2:
-            print "Invalid number of arguments. IP address of desired server must be provided as the only argument."
-            return
         SERVER = False
-        CLIENT = MultiplayerClientClient("server-ip-here")
+        CLIENT = MultiplayerClientClient(sys.argv[1])
 
     __builtin__.WINDOW = Window(width=800, height=600, caption='Pyglet', resizable=True)
     # Hide the mouse cursor and prevent the mouse from leaving the WINDOW.
@@ -1662,6 +1665,7 @@ def main():
 
 class MultiplayerClientClient:
     def __init__(self, addr):
+        self.connected = False
         self.factory = pb.PBClientFactory()
         reactor.connectTCP(addr, 8770, self.factory)
         import socket
@@ -1732,7 +1736,7 @@ class MultiplayerServerServer(pb.Root):
     def broadcastWithinRange(self, pkt, distance, c_op=False):
         for c in self.clientList:
             if(c[u'uuid'] != pkt[u'uuid']):
-                if(getDistance(self.getClient(pkt.uuid), c.network_player.getPosition()) < distance):
+                if(getDistance(self.getClient(pkt[u'uuid']), c[u'network_player'].getPosition()) < distance):
                     if(c_op) != False:
                         c_op(c)
                     c.send(jsonpickle.encode(pkt))
@@ -1758,35 +1762,35 @@ class MultiplayerServerServer(pb.Root):
 
             if j[u'action'] == "player.move.forward.start":
                 def op(client):
-                    client.network_player.strafe[0] -= 1
+                    client[u'network_player'].strafe[0] -= 1
                 self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
             elif j[u'action'] == "player.move.forward.stop":
                 def op(client):
-                    client.network_player.strafe[0] += 1
+                    client[u'network_player'].strafe[0] += 1
                 self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
             elif j[u'action'] == "player.move.backwards.start":
                 def op(client):
-                    client.network_player.strafe[0] += 1
+                    client[u'network_player'].strafe[0] += 1
                 self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
             elif j[u'action'] == "player.move.backwards.stop":
                 def op(client):
-                    client.network_player.strafe[0] -= 1
+                    client[u'network_player'].strafe[0] -= 1
                 self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
             elif j[u'action'] == "player.move.left.start":
                 def op(client):
-                    client.network_player.strafe[1] -= 1
+                    client[u'network_player'].strafe[1] -= 1
                 self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
             elif j[u'action'] == "player.move.left.stop":
                 def op(client):
-                    client.network_player.strafe[1] += 1
+                    client[u'network_player'].strafe[1] += 1
                 self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
             elif j[u'action'] == "player.move.right.start":
                 def op(client):
-                    client.network_player.strafe[1] += 1
+                    client[u'network_player'].strafe[1] += 1
                 self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
             elif j[u'action'] == "player.move.right.stop":
                 def op(client):
-                    client.network_player.strafe[1] -= 1
+                    client[u'network_player'].strafe[1] -= 1
                 self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
 
 
