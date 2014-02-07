@@ -1754,7 +1754,7 @@ class MultiplayerServerServer(pb.Root):
             self.clientList.append(dict(uuid=str(u), server_client=serverClient, network_player=np))
             serverClient.send(jsonpickle.encode(dict(msg="uuid", uuid=str(u)), unpicklable=True))
             serverClient.send(jsonpickle.encode(dict(msg="player.position", position=str(np.getPosition())), unpicklable=True))
-            self.broadcastWithinRange(dict(msg="networkplayer.position", uuid=j[u'uuid'], position=str(np.getPosition())), 10)
+            self.broadcastWithinRange(dict(msg="networkplayer.position", uuid=str(u), position=str(np.getPosition())), 10)
 
         elif j[u'msg'] == "action":
             print "SERVER ACTION: " + j[u'action']
