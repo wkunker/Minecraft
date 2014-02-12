@@ -33,6 +33,8 @@ WALKING_SPEED = 5
 ACTUAL_WALKING_SPEED = WALKING_SPEED
 FLYING_SPEED = 15
 
+BROADCASTDISTANCE = 100000
+
 GRAVITY = 20.0
 MAX_JUMP_HEIGHT = 1.0 # About the height of a block.
 # To derive the formula for calculating jump speed, first solve
@@ -208,7 +210,7 @@ class Model(object):
         """
         n = 80  # 1/2 width and height of world
         s = 1  # step size
-        y = -100  # initial y height
+        y = -5  # initial y height
         max_depth = 10
         h = 0
         while h < max_depth:
@@ -1057,6 +1059,9 @@ class NetworkPlayer(object):
         self.setPosition(position)
         self.__firstrun = False
         self.strafe = [0,0]
+        self.flying = False
+        self.dy = 0
+        self.rotation = (0, 0)
     def setPosition(self, position):
         if(self.__firstrun == False):
             WINDOW.model.remove_block(self._position, immediate=True)
@@ -1088,9 +1093,9 @@ class NetworkPlayer(object):
             self.dy = max(self.dy, -TERMINAL_VELOCITY)
             dy += self.dy * dt
         # collisions
-        x, y, z = self.position
+        x, y, z = self._position
         x, y, z = self.collide((x + dx, y + dy, z + dz), PLAYER_HEIGHT)
-        self.position = (x, y, z)
+        self.setPosition((x, y, z))
 
     def get_motion_vector(self):
         """ Returns the current motion vector indicating the velocity of the
@@ -1130,6 +1135,52 @@ class NetworkPlayer(object):
             dx = 0.0
             dz = 0.0
         return (dx, dy, dz)
+
+    def collide(self, position, height):
+        """ Checks to see if the player at the given `position` and `height`
+        is colliding with any blocks in the world.
+
+        Parameters
+        ----------
+        position : tuple of len 3
+            The (x, y, z) position to check for collisions at.
+        height : int or float
+            The height of the player.
+
+        Returns
+        -------
+        position : tuple of len 3
+            The new position of the player taking into account collisions.
+
+        """
+        # How much overlap with a dimension of a surrounding block you need to
+        # have to count as a collision. If 0, touching terrain at all counts as
+        # a collision. If .49, you sink into the ground, as if walking through
+        # tall grass. If >= .5, you'll fall through the ground.
+        pad = 0.25
+        p = list(position)
+        np = normalize(position)
+        for face in FACES:  # check all surrounding blocks
+            for i in xrange(3):  # check each dimension independently
+                if not face[i]:
+                    continue
+                # How much overlap you have with this dimension.
+                d = (p[i] - np[i]) * face[i]
+                if d < pad:
+                    continue
+                for dy in xrange(height):  # check each height
+                    op = list(np)
+                    op[1] -= dy
+                    op[i] += face[i]
+                    if tuple(op) not in WINDOW.model.world:
+                        continue
+                    p[i] -= (d - pad) * face[i]
+                    if face == (0, -1, 0) or face == (0, 1, 0):
+                        # You are colliding with the ground or ceiling, so stop
+                        # falling / rising.
+                        self.dy = 0
+                    break
+        return tuple(p)
 
 class Window(pyglet.window.Window):
 
@@ -1268,6 +1319,10 @@ class Window(pyglet.window.Window):
             The change in time since the last call.
 
         """
+        global CLIENTSERVER
+        if 'CLIENTSERVER' in globals():
+            CLIENTSERVER.update(dt)
+
         self.model.process_queue()
         self.world_items.process_queue()
         sector = sectorize(self.position)
@@ -1390,6 +1445,7 @@ class Window(pyglet.window.Window):
                         self.player.selected.use(previous)
                 else:
                     if texture != BLOCKS["STONE"]:
+                        CLIENT.send(dict(msg="action", action="player.attack", player_position=str(WINDOW.position), player_orientation=str(WINDOW.get_sight_vector()), target_position=str(block)))
                         self.player.selected.use(block)
         else:
             self.set_exclusive_mouse(True)
@@ -1638,6 +1694,7 @@ def main():
     global SERVER
     global CLIENT
     global STARTING_POSITION
+    global CLIENTSERVER
 
     STARTING_POSITION = (0, 0, 0)
     LISTENSERVER = True
@@ -1664,15 +1721,34 @@ def main():
     #CLIENT.send("HELLO!")
     reactor.run()
 
+from netifaces import interfaces, ifaddresses, AF_INET
+def ipv4_addresses():
+    ip_list = []
+    for interface in interfaces():
+        try:
+            for link in ifaddresses(interface)[AF_INET]:
+                ip_list.append(link['addr'])
+        except KeyError:
+            pass # Skip KeyError since it's possible to be caused by various device configurations.
+    return ip_list
+
 class MultiplayerClientClient:
     def __init__(self, addr):
         self.connected = False
         self.factory = pb.PBClientFactory()
         reactor.connectTCP(addr, 8770, self.factory)
         import socket
-        j = dict(msg="init", addr=socket.gethostbyname(socket.gethostname()))
+        
+        # TODO: Rancid hack right here... Instead need to provide the IP address based on the interface Twisted is using.
+        import re
+        addr = "0.0.0.0"
+        for ip in ipv4_addresses():
+            print "loop found: " + ip
+            if(re.match("192\.168\.1\.", ip)):
+                print "ASSIGNING IP ADDRESS::::::::" + ip
+                addr = ip
+        j = dict(msg="init", addr=addr)
         self.send(j, False) # No UUID before connecting--UUID provided by server.
-        #self.send('{ "msg": "init", "addr": "' + socket.gethostbyname(socket.gethostname()) + '" }')
 
     # include_uuid: Attempts to add (or modify existing) the uuid of the client to the request before sending.
     def send(self, msg, include_uuid=True):
@@ -1685,11 +1761,24 @@ class MultiplayerClientClient:
         d.addCallback(lambda obj: obj.callRemote("receive", jsonpickle.encode(msg_fin, unpicklable=True)))
         #d.addCallback(lambda echo: "server echoed: " + echo)
 
+def strToTuple3(t3_str):
+    splt = t3_str.split(",")
+    x = 0
+    while x < 3:
+        splt[x] = splt[x].replace("(", "").replace(")", "")
+        x += 1
+    return (float(str(splt[0]).strip()), float(str(splt[1]).strip()), float(str(splt[2]).strip()))
+
 class MultiplayerClientServer(pb.Root):
     def __init__(self):
         reactor.listenTCP(8771, pb.PBServerFactory(self))
+        self.clientList = []
+
     def remote_receive(self, pkt):
         j = jsonpickle.decode(pkt)
+
+        print "CLIENT RECEIVE FIRED!"
+        print "MSG: " + j[u'msg']
 
         if j[u'msg'] == "uuid":
             print "server provided uuid: " + j[u'uuid']
@@ -1697,14 +1786,55 @@ class MultiplayerClientServer(pb.Root):
             CLIENT.uuid = j[u'uuid']
         elif j[u'msg'] == "player.position":
             print "server provided player.position: " + j[u'position']
-            splt = j[u'position'].split(",")
-            x = 0
-            while x < 3:
-                splt[x] = splt[x].replace("(", "").replace(")", "")
-                x += 1
-            WINDOW.position = (float(str(splt[0]).strip()), float(str(splt[1]).strip()), float(str(splt[2]).strip()))
+            WINDOW.position = strToTuple3(j[u'position'])
+        elif j[u'msg'] == "action":
+            client = self.getClient(j[u'uuid'])
+
+            print "CLIENT RECEIVING ACTION: " + j[u'action']
+
+            print "POSITION::::::::" + j[u'position']
+
+            if j[u'action'] == "player.move.forward.start":
+                client[u'network_player'].strafe[0] -= 1
+            elif j[u'action'] == "player.move.forward.stop":
+                client[u'network_player'].strafe[0] += 1
+            elif j[u'action'] == "player.move.backwards.start":
+                client[u'network_player'].strafe[0] += 1
+            elif j[u'action'] == "player.move.backwards.stop":
+                client[u'network_player'].strafe[0] -= 1
+            elif j[u'action'] == "player.move.left.start":
+                client[u'network_player'].strafe[1] -= 1
+            elif j[u'action'] == "player.move.left.stop":
+                client[u'network_player'].strafe[1] += 1
+            elif j[u'action'] == "player.move.right.start":
+                cclient[u'network_player'].strafe[1] += 1
+            elif j[u'action'] == "player.move.right.stop":
+                client[u'network_player'].strafe[1] -= 1
+            elif j[u'action'] == "player.attack":
+                print "BLOCK POSITION: " + j[u'block_position']
         elif j[u'msg'] == "networkplayer.position":
-            pass
+            # TODO: Implement this... Following code is what's sent from the server:
+            #self.broadcastWithinRange(dict(msg="networkplayer.position", uuid=str(u), position=str(np.getPosition())), BROADCASTDISTANCE)
+            client = self.getClient(j[u'uuid'])
+            pos = strToTuple3(j[u'position'])
+            if not client:
+                u = j[u'uuid']
+                np = NetworkPlayer(pos)
+                self.clientList.append(dict(uuid=str(u), network_player=np))
+            else:
+                client[u'network_player'].setPosition(pos)
+
+    # Accepts a uuid (string) and attempts to find a client from the clientList.
+    def getClient(self, uuid):
+        for client in self.clientList:
+            #print "PRINTING DEBUG DICT: " + jsonpickle.encode(client, unpicklable=True)
+            if client[u'uuid'] == uuid:
+                return client
+        return False
+
+    def update(self, dt):
+        for client in self.clientList:
+            client[u'network_player'].update(dt)
 
 # Get the distance between two three dimensional points (tuples).
 def getDistance(xyz1, xyz2):
@@ -1734,18 +1864,31 @@ class MultiplayerServerServer(pb.Root):
     # Broadcast a packet consisting of a dict, which contains uuid of the broadcaster.
     # Optional c_op parameter accepts a function which gets called for each valid client found to broadcast to.
     #   The current found client is passed into c_op when called.
+    '''
     def broadcastWithinRange(self, pkt, distance, c_op=False):
         for c in self.clientList:
+            # Make sure the packet being broadcast isn't sent back to the broadcaster.
             if(c[u'uuid'] != pkt[u'uuid']):
                 if(getDistance(self.getClient(pkt[u'uuid'])[u'network_player'].getPosition(), c[u'network_player'].getPosition()) < distance):
                     if(c_op) != False:
                         c_op(c)
                     c[u'server_client'].send(jsonpickle.encode(pkt))
+    '''
+
+    # For testing purposes, send to all clients except for the sender.
+    def broadcastWithinRange(self, pkt, distance, c_op=False):
+            for c in self.clientList:
+                # Make sure the packet being broadcast isn't sent back to the broadcaster.
+                if(c[u'uuid'] != pkt[u'uuid']):
+                    c[u'server_client'].send(jsonpickle.encode(pkt))
+
 
     def remote_receive(self, pkt):
         j = jsonpickle.decode(pkt)
+        global BROADCASTDISTANCE
 
         if j[u'msg'] == "init":
+            print "Server init incoming: " + j[u'addr']
             serverClient = MultiplayerServerClient(j[u'addr'])
             import uuid
             u = uuid.uuid4()
@@ -1754,7 +1897,7 @@ class MultiplayerServerServer(pb.Root):
             self.clientList.append(dict(uuid=str(u), server_client=serverClient, network_player=np))
             serverClient.send(jsonpickle.encode(dict(msg="uuid", uuid=str(u)), unpicklable=True))
             serverClient.send(jsonpickle.encode(dict(msg="player.position", position=str(np.getPosition())), unpicklable=True))
-            self.broadcastWithinRange(dict(msg="networkplayer.position", uuid=str(u), position=str(np.getPosition())), 10)
+            self.broadcastWithinRange(dict(msg="networkplayer.position", uuid=str(u), position=str(np.getPosition())), BROADCASTDISTANCE)
 
         elif j[u'msg'] == "action":
             print "SERVER ACTION: " + j[u'action']
@@ -1764,35 +1907,35 @@ class MultiplayerServerServer(pb.Root):
             if j[u'action'] == "player.move.forward.start":
                 def op(client):
                     client[u'network_player'].strafe[0] -= 1
-                self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
+                self.broadcastWithinRange(dict(msg="action", action=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), BROADCASTDISTANCE, op)
             elif j[u'action'] == "player.move.forward.stop":
                 def op(client):
                     client[u'network_player'].strafe[0] += 1
-                self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
+                self.broadcastWithinRange(dict(msg="action", action=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), BROADCASTDISTANCE, op)
             elif j[u'action'] == "player.move.backwards.start":
                 def op(client):
                     client[u'network_player'].strafe[0] += 1
-                self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
+                self.broadcastWithinRange(dict(msg="action", action=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), BROADCASTDISTANCE, op)
             elif j[u'action'] == "player.move.backwards.stop":
                 def op(client):
                     client[u'network_player'].strafe[0] -= 1
-                self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
+                self.broadcastWithinRange(dict(msg="action", action=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), BROADCASTDISTANCE, op)
             elif j[u'action'] == "player.move.left.start":
                 def op(client):
                     client[u'network_player'].strafe[1] -= 1
-                self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
+                self.broadcastWithinRange(dict(msg="action", action=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), BROADCASTDISTANCE, op)
             elif j[u'action'] == "player.move.left.stop":
                 def op(client):
                     client[u'network_player'].strafe[1] += 1
-                self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
+                self.broadcastWithinRange(dict(msg="action", action=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), BROADCASTDISTANCE, op)
             elif j[u'action'] == "player.move.right.start":
                 def op(client):
                     client[u'network_player'].strafe[1] += 1
-                self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
+                self.broadcastWithinRange(dict(msg="action", action=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), BROADCASTDISTANCE, op)
             elif j[u'action'] == "player.move.right.stop":
                 def op(client):
                     client[u'network_player'].strafe[1] -= 1
-                self.broadcastWithinRange(dict(msg=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), 10, op)
+                self.broadcastWithinRange(dict(msg="action", action=j[u'action'], uuid=j[u'uuid'], position=str(np.getPosition())), BROADCASTDISTANCE, op)
 
 
 '''
