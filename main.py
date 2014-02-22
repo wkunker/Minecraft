@@ -1807,7 +1807,7 @@ class MultiplayerClientServer(pb.Root):
             elif j[u'action'] == "player.move.left.stop":
                 client[u'network_player'].strafe[1] += 1
             elif j[u'action'] == "player.move.right.start":
-                cclient[u'network_player'].strafe[1] += 1
+                client[u'network_player'].strafe[1] += 1
             elif j[u'action'] == "player.move.right.stop":
                 client[u'network_player'].strafe[1] -= 1
             elif j[u'action'] == "player.attack":
